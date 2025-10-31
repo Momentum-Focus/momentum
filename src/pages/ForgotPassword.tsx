@@ -5,48 +5,36 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import momentumLogo from '@/assets/momentum-logo.png';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
-const Login = () => {
+const ForgotPassword = () => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Por favor, preencha e-mail e senha.",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    if (password === "123456") {
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
       toast({
-        title: "Senha incorreta",
-        description: "A senha 123456 está incorreta.",
+        title: "E-mail inválido",
+        description: "Informe um e-mail válido para continuar.",
         variant: "destructive",
       });
       return;
     }
 
     setIsLoading(true);
-    
+
     setTimeout(() => {
       setIsLoading(false);
       toast({
-        title: "Login realizado com sucesso!",
-        description: "Redirecionando para a página inicial...",
+        title: "E-mail enviado",
+        description: "Se existir uma conta, você receberá as instruções em instantes.",
       });
-      
-      setTimeout(() => {
-        window.location.href = "/home";
-      }, 1000);
-    }, 1000);
+      setTimeout(() => navigate('/login'), 800);
+    }, 900);
   };
 
   return (
@@ -56,15 +44,15 @@ const Login = () => {
           <div className="flex flex-col items-center space-y-3">
             <img src={momentumLogo} alt="Momentum" className="w-16 h-16" />
             <CardTitle className="text-3xl font-bold text-foreground">
-              Momentum
+              Recuperar senha
             </CardTitle>
           </div>
           <CardDescription>
-            Entre em sua conta para acessar o espaço de foco
+            Digite seu e-mail para receber o link de redefinição
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -76,42 +64,18 @@ const Login = () => {
                 required
               />
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Sua senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
 
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? "Entrando..." : "Entrar"}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Enviando..." : "Enviar link"}
             </Button>
 
-            <div className="text-center space-y-2">
+            <div className="text-center pt-4">
               <Link
-                to="/forgot-password"
+                to="/login"
                 className="text-sm text-muted-foreground hover:text-primary transition-colors"
               >
-                Esqueci minha senha
+                Voltar para o login
               </Link>
-
-              
-              <div className="text-sm text-muted-foreground">
-                Não tem uma conta?{' '}
-                <Link to="/signup" className="text-primary hover:underline">
-                  Criar conta
-                </Link>
-              </div>
             </div>
           </form>
         </CardContent>
@@ -120,4 +84,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default ForgotPassword;

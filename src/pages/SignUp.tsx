@@ -5,46 +5,46 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import momentumLogo from '@/assets/momentum-logo.png';
-import { Link, useNavigate } from 'react-router-dom';
 
-const Login = () => {
+const SignUp = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password) {
+
+    if (!name || !email || !password || !confirm) {
       toast({
         title: "Campos obrigatórios",
-        description: "Por favor, preencha e-mail e senha.",
+        description: "Preencha todos os campos para continuar.",
         variant: "destructive",
       });
       return;
     }
 
-    if (password === "123456") {
+    if (password !== confirm) {
       toast({
-        title: "Senha incorreta",
-        description: "A senha 123456 está incorreta.",
+        title: "Senhas diferentes",
+        description: "As senhas informadas não conferem.",
         variant: "destructive",
       });
       return;
     }
 
     setIsLoading(true);
-    
+
     setTimeout(() => {
       setIsLoading(false);
       toast({
-        title: "Login realizado com sucesso!",
-        description: "Redirecionando para a página inicial...",
+        title: "Conta criada com sucesso!",
+        description: "Você será redirecionado para o login.",
       });
-      
       setTimeout(() => {
-        window.location.href = "/home";
+        window.location.href = "/login";
       }, 1000);
     }, 1000);
   };
@@ -56,15 +56,27 @@ const Login = () => {
           <div className="flex flex-col items-center space-y-3">
             <img src={momentumLogo} alt="Momentum" className="w-16 h-16" />
             <CardTitle className="text-3xl font-bold text-foreground">
-              Momentum
+              Criar conta
             </CardTitle>
           </div>
           <CardDescription>
-            Entre em sua conta para acessar o espaço de foco
+            Preencha os dados abaixo para se cadastrar
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSignUp} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome completo</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Seu nome"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -76,41 +88,48 @@ const Login = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Sua senha"
+                placeholder="Crie uma senha"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
 
-            <Button 
-              type="submit" 
+            <div className="space-y-2">
+              <Label htmlFor="confirm">Confirmar senha</Label>
+              <Input
+                id="confirm"
+                type="password"
+                placeholder="Repita sua senha"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? "Entrando..." : "Entrar"}
+              {isLoading ? "Criando conta..." : "Cadastrar"}
             </Button>
 
             <div className="text-center space-y-2">
-              <Link
-                to="/forgot-password"
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
-              >
-                Esqueci minha senha
-              </Link>
-
-              
               <div className="text-sm text-muted-foreground">
-                Não tem uma conta?{' '}
-                <Link to="/signup" className="text-primary hover:underline">
-                  Criar conta
-                </Link>
+                Já tem uma conta?{' '}
+                <a
+                  href="/login"
+                  className="text-primary hover:underline"
+                >
+                  Entrar
+                </a>
               </div>
             </div>
           </form>
@@ -120,4 +139,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default SignUp;
