@@ -1,80 +1,112 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import momentumLogo from '@/assets/momentum-logo.png';
+import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { useMutation } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+
+type SignUpFormInputs = {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  confirm: string;
+};
+
+type AuthResponse = {
+  message: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  token: string;
+};
 
 const SignUp = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<SignUpFormInputs>();
 
-    if (!name || !email || !password || !confirm) {
+  const password = watch('password');
+
+  const { mutate, isPending } = useMutation<
+    AuthResponse,
+    Error,
+    Omit<SignUpFormInputs, 'confirm'>
+  >({
+    mutationFn: (data) =>
+      api.post('/auth/register', data).then((res) => res.data),
+
+    onSuccess: (data) => {
+      localStorage.setItem('authToken', data.token);
       toast({
-        title: "Campos obrigatórios",
-        description: "Preencha todos os campos para continuar.",
-        variant: "destructive",
+        title: 'Conta criada com sucesso!',
+        description: `Bem-vindo, ${data.user.name}.`,
       });
-      return;
-    }
+      
+      navigate('/dashboard');
+    },
 
-    if (password !== confirm) {
+    onError: (error: any) => {
       toast({
-        title: "Senhas diferentes",
-        description: "As senhas informadas não conferem.",
-        variant: "destructive",
+        title: 'Erro ao criar conta',
+        description:
+          error.response?.data?.message ||
+          'Ocorreu um erro. Tente novamente.',
+        variant: 'destructive',
       });
-      return;
-    }
+    },
+  });
 
-    setIsLoading(true);
-
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: "Conta criada com sucesso!",
-        description: "Você será redirecionado para o login.",
-      });
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 1000);
-    }, 1000);
+  const handleSignUp = (data: SignUpFormInputs) => {
+    const { confirm, ...apiData } = data;
+    mutate(apiData);
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-8">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex flex-col items-center space-y-3">
             <img src={momentumLogo} alt="Momentum" className="w-16 h-16" />
             <CardTitle className="text-3xl font-bold text-foreground">
-              Criar conta
+              Criar nova conta
             </CardTitle>
           </div>
           <CardDescription>
-            Preencha os dados abaixo para se cadastrar
+            Preencha seus dados para começar.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignUp} className="space-y-4">
+          <form onSubmit={handleSubmit(handleSignUp)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nome completo</Label>
               <Input
                 id="name"
-                type="text"
                 placeholder="Seu nome"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
+                {...register('name', { required: 'Nome é obrigatório' })}
               />
+              {errors.name && (
+                <p className="text-sm text-destructive">{errors.name.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -83,10 +115,27 @@ const SignUp = () => {
                 id="email"
                 type="email"
                 placeholder="seu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                {...register('email', { required: 'E-mail é obrigatório' })}
               />
+              {errors.email && (
+                <p className="text-sm text-destructive">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="phone">Telefone (c/ DDD)</Label>
+              <Input
+                id="phone"
+                placeholder="Ex: 11999998888"
+                {...register('phone', { required: 'Telefone é obrigatório' })}
+              />
+              {errors.phone && (
+                <p className="text-sm text-destructive">
+                  {errors.phone.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -94,11 +143,20 @@ const SignUp = () => {
               <Input
                 id="password"
                 type="password"
-                placeholder="Crie uma senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
+                placeholder="Crie uma senha forte"
+                {...register('password', {
+                  required: 'Senha é obrigatória',
+                  minLength: {
+                    value: 8,
+                    message: 'A senha deve ter no mínimo 8 caracteres',
+                  },
+                })}
               />
+              {errors.password && (
+                <p className="text-sm text-destructive">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -107,29 +165,29 @@ const SignUp = () => {
                 id="confirm"
                 type="password"
                 placeholder="Repita sua senha"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
+                {...register('confirm', {
+                  required: 'Confirmação é obrigatória',
+                  validate: (value) =>
+                    value === password || 'As senhas não coincidem',
+                })}
               />
+              {errors.confirm && (
+                <p className="text-sm text-destructive">
+                  {errors.confirm.message}
+                </p>
+              )}
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? "Criando conta..." : "Cadastrar"}
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? 'Criando conta...' : 'Cadastrar'}
             </Button>
 
             <div className="text-center space-y-2">
               <div className="text-sm text-muted-foreground">
                 Já tem uma conta?{' '}
-                <a
-                  href="/login"
-                  className="text-primary hover:underline"
-                >
+                <Link to="/login" className="text-primary hover:underline">
                   Entrar
-                </a>
+                </Link>
               </div>
             </div>
           </form>

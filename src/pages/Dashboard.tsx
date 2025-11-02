@@ -1,118 +1,137 @@
-// src/pages/Dashboard.tsx
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import PomodoroTimer from '@/components/PomodoroTimer';
-import TodoList from '@/components/TodoList';
-import { LogOut } from 'lucide-react';
+import { PomodoroWidget } from '@/components/PomodoroWidget';
+import { TasksWidget, Task } from '@/components/TasksWidget';
+import { LogOut, Loader2, AlertCircle } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { useState } from 'react';
+import { MusicWidget } from '@/components/MusicWidget';
+
+type UserProfile = {
+  id: number;
+  name: string;
+  email: string;
+};
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  
-  // Pega as informações do usuário logado
-  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-  
-  // Função de logout
+  const queryClient = useQueryClient();
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const [showMusic, setShowMusic] = useState(false);
+  const [showTasks, setShowTasks] = useState(true);
+  const [showPomodoro, setShowPomodoro] = useState(true);
+
+  const {
+    data: user,
+    isLoading: isLoadingUser,
+    isError: isErrorUser,
+  } = useQuery<UserProfile>({
+    queryKey: ['userProfile'],
+    queryFn: () => api.get('/user/me').then((res) => res.data),
+    retry: 1,
+  });
+
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
+    localStorage.removeItem('authToken');
+    queryClient.clear();
     navigate('/login');
   };
 
+  const handleTaskStart = (task: Task) => {
+    setActiveTask(task);
+    setShowPomodoro(true);
+  };
+  
+  const handleTaskComplete = () => {
+    setActiveTask(null);
+  }
+
+  if (isLoadingUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isErrorUser) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-destructive">
+        <AlertCircle className="h-12 w-12 mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Erro de Autenticação</h2>
+        <p className="text-muted-foreground mb-4">
+          Não foi possível carregar seu perfil. Sua sessão pode ter expirado.
+        </p>
+        <Button onClick={handleLogout}>Voltar para o Login</Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50">
-      {/* Header com animação */}
-      <header className="bg-white shadow-sm border-b transition-all duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-blue-950 dark:to-gray-900">
+      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm shadow-sm border-b transition-all duration-300 fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3 animate-slide-in-left">
-            <div className="h-10 w-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold transition-all duration-300 hover:scale-110 hover:rotate-12">
-              {currentUser.name?.charAt(0).toUpperCase()}
+            <div className="h-10 w-10 bg-gradient-to-br from-primary to-blue-500 rounded-full flex items-center justify-center text-white font-bold transition-all duration-300 hover:scale-110 hover:rotate-12">
+              {user?.name?.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900">
-                Olá, {currentUser.name}!
+              <h2 className="font-semibold text-foreground dark:text-gray-100">
+                Olá, {user?.name}!
               </h2>
-              <p className="text-sm text-gray-500">{currentUser.email}</p>
+              <p className="text-sm text-muted-foreground dark:text-gray-400">
+                Pronto para focar?
+              </p>
             </div>
           </div>
-          
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            className="gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </Button>
+          <div className="flex items-center gap-2 animate-slide-in-right">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTasks(!showTasks)}
+            >
+              Tarefas
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMusic(!showMusic)}
+            >
+              Música
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </header>
       
-      {/* Conteúdo principal */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-2">
-            Momentum Focus
-          </h1>
-          <p className="text-gray-600">
-            Gerencie seu tempo e aumente sua produtividade
-          </p>
-        </div>
+      <main className="pt-24">
+        {showPomodoro && (
+           <PomodoroWidget
+            onClose={() => setShowPomodoro(false)}
+            activeTask={activeTask}
+            onTaskComplete={handleTaskComplete}
+          />
+        )}
+
+        {showTasks && (
+          <TasksWidget
+            onClose={() => setShowTasks(false)}
+            onTaskStart={handleTaskStart}
+          />
+        )}
         
-        {/* Grid com Timer e TodoList */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Timer Pomodoro */}
-          <div>
-            <PomodoroTimer />
-          </div>
-          
-          {/* Lista de Tarefas */}
-          <div>
-            <TodoList />
-          </div>
-        </div>
-        
-        {/* Área para futuras features */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <h3 className="font-semibold text-lg mb-2">🎵 Músicas & Sons</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Em breve: sons ambiente e playlists para ajudar na concentração
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
-                Chuva
-              </span>
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
-                Café
-              </span>
-              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">
-                Natureza
-              </span>
-              <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
-                Lo-fi
-              </span>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <h3 className="font-semibold text-lg mb-2">🌄 Ambientes</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Em breve: backgrounds personalizados com vídeos e imagens
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              <span className="px-3 py-1 bg-sky-100 text-sky-700 text-xs rounded-full">
-                Praias
-              </span>
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full">
-                Montanhas
-              </span>
-              <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs rounded-full">
-                Cidades
-              </span>
-              <span className="px-3 py-1 bg-rose-100 text-rose-700 text-xs rounded-full">
-                Espaço
-              </span>
-            </div>
-          </div>
-        </div>
+        {showMusic && (
+          <MusicWidget onClose={() => setShowMusic(false)} />
+        )}
       </main>
     </div>
   );
