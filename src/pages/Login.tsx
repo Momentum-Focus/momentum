@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import momentumLogo from '@/assets/momentum-logo.png';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -99,35 +100,19 @@ const Login = () => {
             </Button>
 
             <div className="text-center space-y-2">
-              <a 
-                href="#" 
+              <Link
+                to="/forgot-password"
                 className="text-sm text-muted-foreground hover:text-primary transition-colors"
-                onClick={(e) => {
-                  e.preventDefault();
-                  toast({
-                    title: "Funcionalidade em desenvolvimento",
-                    description: "A recuperação de senha será implementada em breve.",
-                  });
-                }}
               >
                 Esqueci minha senha
-              </a>
+              </Link>
+
               
               <div className="text-sm text-muted-foreground">
                 Não tem uma conta?{' '}
-                <a 
-                  href="#" 
-                  className="text-primary hover:underline"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    toast({
-                      title: "Funcionalidade em desenvolvimento",
-                      description: "O cadastro será implementado em breve.",
-                    });
-                  }}
-                >
+                <Link to="/signup" className="text-primary hover:underline">
                   Criar conta
-                </a>
+                </Link>
               </div>
             </div>
           </form>
