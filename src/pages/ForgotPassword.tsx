@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import momentumLogo from '@/assets/momentum-logo.png';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import momentumLogo from "@/assets/momentum-logo.png";
+import { useNavigate, Link } from "react-router-dom";
 
 const ForgotPassword = () => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -31,9 +37,10 @@ const ForgotPassword = () => {
       setIsLoading(false);
       toast({
         title: "E-mail enviado",
-        description: "Se existir uma conta, você receberá as instruções em instantes.",
+        description:
+          "Se existir uma conta, você receberá as instruções em instantes.",
       });
-      setTimeout(() => navigate('/login'), 800);
+      setTimeout(() => navigate("/login"), 800);
     }, 900);
   };
 

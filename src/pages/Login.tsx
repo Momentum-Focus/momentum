@@ -36,7 +36,6 @@ const Login = () => {
 
     setIsLoading(true);
     
-    // Simulate authentication delay
     setTimeout(() => {
       setIsLoading(false);
       toast({
@@ -44,7 +43,6 @@ const Login = () => {
         description: "Redirecionando para a página inicial...",
       });
       
-      // Redirect to home page
       setTimeout(() => {
         window.location.href = "/home";
       }, 1000);
