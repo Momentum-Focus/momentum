@@ -1,0 +1,131 @@
+# Dependências
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+*.local
+*.local.*
+
+# Cache
+.cache/
+.parcel-cache/
+.npm
+.eslintcache
+.stylelintcache
+.vite/
+.turbo/
+.next/
+out/
+
+# Arquivos de ambiente
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# Sistema Operacional
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Arquivos de cobertura
+coverage/
+*.lcov
+.nyc_output/
+
+# Arquivos de teste
+.jest/
+.jest-cache/
+
+# Arquivos de lock (manter apenas um)
+# package-lock.json  # Descomente se usar npm
+# yarn.lock           # Descomente se usar yarn
+# pnpm-lock.yaml      # Descomente se usar pnpm
+# bun.lockb            # Descomente se usar bun
+
+# TypeScript
+*.tsbuildinfo
+*.tsbuildinfo.*
+
+# Arquivos de configuração local
+tsconfig.local.json
+vite.config.local.ts
+
+# Arquivos de upload/usuário
+uploads/
+public/uploads/
+
+# Arquivos de backup
+*.backup
+*.orig
+
+# Arquivos do Git
+.git/
+.gitignore.bak
+
+# Arquivos de sistema
+*.pid
+*.seed
+*.pid.lock
+
+# Arquivos de configuração sensíveis
+config.local.json
+secrets.json
+*.pem
+*.key
+
+# Arquivos de build de produção
+*.map
+source-map-explorer-output.json
+
