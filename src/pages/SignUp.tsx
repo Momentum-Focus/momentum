@@ -1,20 +1,20 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import momentumLogo from '@/assets/momentum-logo.png';
-import { Link, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { useMutation } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+} from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import momentumLogo from "@/assets/momentum-logo.png";
+import { Link, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 type SignUpFormInputs = {
   name: string;
@@ -45,33 +45,32 @@ const SignUp = () => {
     formState: { errors },
   } = useForm<SignUpFormInputs>();
 
-  const password = watch('password');
+  const password = watch("password");
 
   const { mutate, isPending } = useMutation<
     AuthResponse,
     Error,
-    Omit<SignUpFormInputs, 'confirm'>
+    Omit<SignUpFormInputs, "confirm">
   >({
     mutationFn: (data) =>
-      api.post('/auth/register', data).then((res) => res.data),
+      api.post("/auth/register", data).then((res) => res.data),
 
     onSuccess: (data) => {
-      localStorage.setItem('authToken', data.token);
+      localStorage.setItem("authToken", data.token);
       toast({
-        title: 'Conta criada com sucesso!',
+        title: "Conta criada com sucesso!",
         description: `Bem-vindo, ${data.user.name}.`,
       });
-      
-      navigate('/dashboard');
+
+      navigate("/");
     },
 
     onError: (error: any) => {
       toast({
-        title: 'Erro ao criar conta',
+        title: "Erro ao criar conta",
         description:
-          error.response?.data?.message ||
-          'Ocorreu um erro. Tente novamente.',
-        variant: 'destructive',
+          error.response?.data?.message || "Ocorreu um erro. Tente novamente.",
+        variant: "destructive",
       });
     },
   });
@@ -91,9 +90,7 @@ const SignUp = () => {
               Criar nova conta
             </CardTitle>
           </div>
-          <CardDescription>
-            Preencha seus dados para começar.
-          </CardDescription>
+          <CardDescription>Preencha seus dados para começar.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(handleSignUp)} className="space-y-4">
@@ -102,10 +99,12 @@ const SignUp = () => {
               <Input
                 id="name"
                 placeholder="Seu nome"
-                {...register('name', { required: 'Nome é obrigatório' })}
+                {...register("name", { required: "Nome é obrigatório" })}
               />
               {errors.name && (
-                <p className="text-sm text-destructive">{errors.name.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.name.message}
+                </p>
               )}
             </div>
 
@@ -115,7 +114,7 @@ const SignUp = () => {
                 id="email"
                 type="email"
                 placeholder="seu@email.com"
-                {...register('email', { required: 'E-mail é obrigatório' })}
+                {...register("email", { required: "E-mail é obrigatório" })}
               />
               {errors.email && (
                 <p className="text-sm text-destructive">
@@ -123,13 +122,13 @@ const SignUp = () => {
                 </p>
               )}
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="phone">Telefone (c/ DDD)</Label>
               <Input
                 id="phone"
                 placeholder="Ex: 11999998888"
-                {...register('phone', { required: 'Telefone é obrigatório' })}
+                {...register("phone", { required: "Telefone é obrigatório" })}
               />
               {errors.phone && (
                 <p className="text-sm text-destructive">
@@ -144,11 +143,11 @@ const SignUp = () => {
                 id="password"
                 type="password"
                 placeholder="Crie uma senha forte"
-                {...register('password', {
-                  required: 'Senha é obrigatória',
+                {...register("password", {
+                  required: "Senha é obrigatória",
                   minLength: {
                     value: 8,
-                    message: 'A senha deve ter no mínimo 8 caracteres',
+                    message: "A senha deve ter no mínimo 8 caracteres",
                   },
                 })}
               />
@@ -165,10 +164,10 @@ const SignUp = () => {
                 id="confirm"
                 type="password"
                 placeholder="Repita sua senha"
-                {...register('confirm', {
-                  required: 'Confirmação é obrigatória',
+                {...register("confirm", {
+                  required: "Confirmação é obrigatória",
                   validate: (value) =>
-                    value === password || 'As senhas não coincidem',
+                    value === password || "As senhas não coincidem",
                 })}
               />
               {errors.confirm && (
@@ -179,12 +178,12 @@ const SignUp = () => {
             </div>
 
             <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? 'Criando conta...' : 'Cadastrar'}
+              {isPending ? "Criando conta..." : "Cadastrar"}
             </Button>
 
             <div className="text-center space-y-2">
               <div className="text-sm text-muted-foreground">
-                Já tem uma conta?{' '}
+                Já tem uma conta?{" "}
                 <Link to="/login" className="text-primary hover:underline">
                   Entrar
                 </Link>

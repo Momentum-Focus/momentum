@@ -9,6 +9,8 @@ interface BackgroundSelectorProps {
   currentBackground: string;
   defaultPosition?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
+  onDragEnd?: (finalPosition: { x: number; y: number }) => void;
+  widgetId?: string;
 }
 
 const PRESET_BACKGROUNDS = [
@@ -50,6 +52,8 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
   currentBackground,
   defaultPosition,
   onPositionChange,
+  onDragEnd,
+  widgetId,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +80,8 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
       className="w-96 max-h-[80vh] overflow-hidden"
       defaultPosition={defaultPosition}
       onPositionChange={onPositionChange}
+      onDragEnd={onDragEnd}
+      widgetId={widgetId}
     >
       <div className="p-6 space-y-6">
         {/* Upload Section */}

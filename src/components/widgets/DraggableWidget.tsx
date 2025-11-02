@@ -10,6 +10,8 @@ interface DraggableWidgetProps {
   className?: string;
   defaultPosition?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
+  onDragEnd?: (finalPosition: { x: number; y: number }) => void;
+  widgetId?: string;
 }
 
 export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
@@ -19,6 +21,8 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
   className,
   defaultPosition = { x: 100, y: 100 },
   onPositionChange,
+  onDragEnd,
+  widgetId,
 }) => {
   const [position, setPosition] = useState(defaultPosition);
   const [isDragging, setIsDragging] = useState(false);
@@ -27,7 +31,7 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
   const widgetRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
   const widgetSizeRef = useRef({ width: 300, height: 200 });
-  const positionChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialMountRef = useRef(true);
 
   // Função para ajustar posição para ficar dentro da viewport
   const adjustPositionToViewport = useCallback(
@@ -53,18 +57,28 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
   // Atualiza posição quando defaultPosition muda e garante que fica dentro da viewport
   useEffect(() => {
     const adjustedPosition = adjustPositionToViewport(defaultPosition);
-    setPosition(adjustedPosition);
+    setPosition((prevPos) => {
+      const positionChanged =
+        adjustedPosition.x !== prevPos.x || adjustedPosition.y !== prevPos.y;
 
-    // Notifica a posição ajustada se necessário
-    if (
-      adjustedPosition.x !== defaultPosition.x ||
-      adjustedPosition.y !== defaultPosition.y
-    ) {
-      if (onPositionChange) {
-        onPositionChange(adjustedPosition);
+      if (positionChanged) {
+        // Só notifica a posição se não for o mount inicial (evita atualização durante render)
+        if (!isInitialMountRef.current && onPositionChange) {
+          requestAnimationFrame(() => {
+            onPositionChange(adjustedPosition);
+          });
+        }
+
+        if (isInitialMountRef.current) {
+          isInitialMountRef.current = false;
+        }
+
+        return adjustedPosition;
       }
-    }
-  }, [defaultPosition, onPositionChange, adjustPositionToViewport]);
+
+      return prevPos;
+    });
+  }, [defaultPosition, adjustPositionToViewport]);
 
   // Ajusta posição quando a janela é redimensionada
   useEffect(() => {
@@ -131,19 +145,13 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
           y: Math.max(margin, Math.min(newY, maxY)),
         };
 
-        // Atualiza posição imediatamente para resposta visual
+        // Atualiza posição imediatamente para resposta visual sem delay
         setPosition(newPosition);
 
-        // Debounce da notificação de mudança de posição (só salva quando parar de arrastar)
-        // Isso reduz re-renders desnecessários no componente pai
-        if (positionChangeTimeoutRef.current) {
-          clearTimeout(positionChangeTimeoutRef.current);
+        // Notifica a posição imediatamente durante o arraste (sem debounce para melhor responsividade)
+        if (onPositionChange) {
+          onPositionChange(newPosition);
         }
-        positionChangeTimeoutRef.current = setTimeout(() => {
-          if (onPositionChange) {
-            onPositionChange(newPosition);
-          }
-        }, 100); // Salva após 100ms sem movimento
       });
     },
     [onPositionChange]
@@ -152,16 +160,17 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
 
-    // Cancela qualquer timeout pendente
-    if (positionChangeTimeoutRef.current) {
-      clearTimeout(positionChangeTimeoutRef.current);
-      positionChangeTimeoutRef.current = null;
-    }
-
-    // Notifica a posição final imediatamente
+    // Notifica a posição final e chama onDragEnd para detectar sobreposições
     setPosition((currentPos) => {
       if (onPositionChange) {
         onPositionChange(currentPos);
+      }
+      // Notifica que o arraste terminou (para verificar sobreposição com outros widgets)
+      if (onDragEnd) {
+        // Usa setTimeout para garantir que o DOM foi atualizado antes de verificar sobreposição
+        setTimeout(() => {
+          onDragEnd(currentPos);
+        }, 0);
       }
       return currentPos;
     });
@@ -170,7 +179,7 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-  }, [onPositionChange]);
+  }, [onPositionChange, onDragEnd]);
 
   useEffect(() => {
     if (isDragging) {
@@ -184,20 +193,18 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      if (positionChangeTimeoutRef.current) {
-        clearTimeout(positionChangeTimeoutRef.current);
-      }
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   return (
     <div
       ref={widgetRef}
+      data-widget-id={widgetId}
       className={cn(
         "fixed bg-widget-background border border-widget-border rounded-lg shadow-widget backdrop-blur-sm bg-opacity-95 z-40",
-        // Remove transição durante o arraste para melhor performance
+        // Remove transição durante o arraste para melhor performance e responsividade
         !isDragging && "transition-all duration-200",
-        isDragging && "cursor-grabbing will-change-transform",
+        isDragging && "cursor-grabbing will-change-transform transition-none",
         !isDragging && "cursor-grab",
         isMinimized && "h-auto",
         className

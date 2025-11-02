@@ -8,12 +8,16 @@ interface MusicWidgetProps {
   onClose: () => void;
   defaultPosition?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
+  onDragEnd?: (finalPosition: { x: number; y: number }) => void;
+  widgetId?: string;
 }
 
 export const MusicWidget: React.FC<MusicWidgetProps> = ({
   onClose,
   defaultPosition,
   onPositionChange,
+  onDragEnd,
+  widgetId,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState([75]);
@@ -30,6 +34,8 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
       className="w-80"
       defaultPosition={defaultPosition}
       onPositionChange={onPositionChange}
+      onDragEnd={onDragEnd}
+      widgetId={widgetId}
     >
       <div className="p-6 space-y-6">
         {/* Platform Connections */}

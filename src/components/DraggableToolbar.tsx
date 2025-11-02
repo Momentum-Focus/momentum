@@ -25,7 +25,6 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const animationFrameRef = useRef<number | null>(null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (
@@ -34,6 +33,10 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
     ) {
       return; // Don't start dragging if clicking on buttons
     }
+
+    // Prevenir seleção de texto durante o arraste
+    e.preventDefault();
+    e.stopPropagation();
 
     setIsDragging(true);
     const rect = toolbarRef.current?.getBoundingClientRect();
@@ -46,39 +49,35 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   }, []);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
+    // Prevenir seleção de texto durante o arraste
+    e.preventDefault();
 
-    animationFrameRef.current = requestAnimationFrame(() => {
-      const newX = e.clientX - dragOffsetRef.current.x;
-      const newY = e.clientY - dragOffsetRef.current.y;
+    const newX = e.clientX - dragOffsetRef.current.x;
+    const newY = e.clientY - dragOffsetRef.current.y;
 
-      // Keep toolbar within viewport bounds
-      const toolbarWidth = toolbarRef.current?.offsetWidth || 400;
-      const toolbarHeight = toolbarRef.current?.offsetHeight || 80;
-      const maxX = window.innerWidth - toolbarWidth;
-      const maxY = window.innerHeight - toolbarHeight;
+    // Keep toolbar within viewport bounds
+    const toolbarWidth = toolbarRef.current?.offsetWidth || 400;
+    const toolbarHeight = toolbarRef.current?.offsetHeight || 80;
+    const maxX = window.innerWidth - toolbarWidth;
+    const maxY = window.innerHeight - toolbarHeight;
 
-      const constrainedPosition = {
-        x: Math.max(0, Math.min(newX, maxX)),
-        y: Math.max(0, Math.min(newY, maxY)),
-      };
+    const constrainedPosition = {
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY)),
+    };
 
-      setPosition(constrainedPosition);
-      localStorage.setItem(
-        "toolbar-position",
-        JSON.stringify(constrainedPosition)
-      );
-    });
+    setPosition(constrainedPosition);
+    // Salvar no localStorage apenas no final do arraste (no handleMouseUp)
   }, []);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
+
+    // Salvar posição no localStorage ao finalizar o arraste
+    setPosition((currentPos) => {
+      localStorage.setItem("toolbar-position", JSON.stringify(currentPos));
+      return currentPos;
+    });
   }, []);
 
   useEffect(() => {
@@ -90,9 +89,6 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
@@ -121,9 +117,10 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
     <div
       ref={toolbarRef}
       className={cn(
-        "fixed bg-widget-background/95 border border-widget-border rounded-2xl shadow-toolbar backdrop-blur-sm z-50 transition-all duration-200",
-        isDragging && "cursor-grabbing scale-105",
-        !isDragging && "cursor-grab hover:bg-widget-background"
+        "fixed bg-widget-background/95 border border-widget-border rounded-2xl shadow-toolbar backdrop-blur-sm z-50",
+        isDragging && "cursor-grabbing scale-105 transition-none select-none",
+        !isDragging &&
+          "cursor-grab hover:bg-widget-background transition-all duration-200"
       )}
       style={{
         left: position.x,
@@ -131,7 +128,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
       }}
       onMouseDown={handleMouseDown}
     >
-      <div className="flex items-center gap-2 py-3 px-4">
+      <div className="flex items-center gap-2 py-3 px-4 select-none">
         <Button
           variant="ghost"
           size="sm"

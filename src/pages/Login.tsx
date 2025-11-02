@@ -1,19 +1,19 @@
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import momentumLogo from '@/assets/momentum-logo.png';
-import { Link, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { useMutation } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+} from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import momentumLogo from "@/assets/momentum-logo.png";
+import { Link, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 type LoginFormInputs = {
   email: string;
@@ -45,27 +45,25 @@ const Login = () => {
     Error,
     LoginFormInputs
   >({
-    mutationFn: (data) =>
-      api.post('/auth/login', data).then((res) => res.data),
+    mutationFn: (data) => api.post("/auth/login", data).then((res) => res.data),
 
     onSuccess: (data) => {
-      localStorage.setItem('authToken', data.token);
+      localStorage.setItem("authToken", data.token);
 
       toast({
-        title: 'Login bem-sucedido!',
+        title: "Login bem-sucedido!",
         description: `Bem-vindo de volta, ${data.user.name}.`,
       });
 
-      navigate('/dashboard');
+      navigate("/");
     },
 
     onError: (error: any) => {
       toast({
-        title: 'Erro no login',
+        title: "Erro no login",
         description:
-          error.response?.data?.message ||
-          'Verifique seu e-mail e senha.',
-        variant: 'destructive',
+          error.response?.data?.message || "Verifique seu e-mail e senha.",
+        variant: "destructive",
       });
     },
   });
@@ -84,9 +82,7 @@ const Login = () => {
               Acessar minha conta
             </CardTitle>
           </div>
-          <CardDescription>
-            Use seu e-mail e senha para entrar.
-          </CardDescription>
+          <CardDescription>Use seu e-mail e senha para entrar.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(handleLogin)} className="space-y-4">
@@ -96,10 +92,12 @@ const Login = () => {
                 id="email"
                 type="email"
                 placeholder="seu@email.com"
-                {...register('email', { required: 'E-mail é obrigatório' })}
+                {...register("email", { required: "E-mail é obrigatório" })}
               />
               {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.email.message}
+                </p>
               )}
             </div>
 
@@ -109,7 +107,7 @@ const Login = () => {
                 id="password"
                 type="password"
                 placeholder="Sua senha"
-                {...register('password', { required: 'Senha é obrigatória' })}
+                {...register("password", { required: "Senha é obrigatória" })}
               />
               {errors.password && (
                 <p className="text-sm text-destructive">
@@ -119,7 +117,7 @@ const Login = () => {
             </div>
 
             <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? 'Entrando...' : 'Entrar'}
+              {isPending ? "Entrando..." : "Entrar"}
             </Button>
 
             <div className="text-center space-y-2">
@@ -131,7 +129,7 @@ const Login = () => {
               </Link>
 
               <div className="text-sm text-muted-foreground">
-                Não tem uma conta?{' '}
+                Não tem uma conta?{" "}
                 <Link to="/signup" className="text-primary hover:underline">
                   Criar conta
                 </Link>

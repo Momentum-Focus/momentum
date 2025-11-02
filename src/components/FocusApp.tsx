@@ -25,7 +25,6 @@ const FocusApp = () => {
   const [showTasks, setShowTasks] = useState(false);
   const [showBackground, setShowBackground] = useState(false);
   const [currentBackground, setCurrentBackground] = useState<string>("");
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
   // Rastrear posições dos widgets abertos
@@ -278,6 +277,89 @@ const FocusApp = () => {
     }));
   };
 
+  // Função para lidar com o fim do arraste e detectar sobreposições
+  const handleDragEnd = (
+    draggedWidgetId: "pomodoro" | "music" | "tasks" | "background",
+    finalPosition: { x: number; y: number }
+  ) => {
+    // Atualiza a posição do widget que foi arrastado
+    updateWidgetPosition(draggedWidgetId, finalPosition);
+
+    // Aguarda um frame para garantir que o DOM foi atualizado
+    requestAnimationFrame(() => {
+      // Obtém o tamanho real do widget arrastado usando a posição final
+      const draggedWidgetElement = document.querySelector(
+        `[data-widget-id="${draggedWidgetId}"]`
+      ) as HTMLElement;
+
+      if (!draggedWidgetElement) return;
+
+      const draggedSize = {
+        width: draggedWidgetElement.offsetWidth,
+        height: draggedWidgetElement.offsetHeight,
+      };
+
+      // Lista de widgets a verificar
+      const widgetsToCheck: Array<{
+        id: "pomodoro" | "music" | "tasks" | "background";
+      }> = [];
+
+      if (showPomodoro && draggedWidgetId !== "pomodoro") {
+        widgetsToCheck.push({ id: "pomodoro" });
+      }
+      if (showMusic && draggedWidgetId !== "music") {
+        widgetsToCheck.push({ id: "music" });
+      }
+      if (showTasks && draggedWidgetId !== "tasks") {
+        widgetsToCheck.push({ id: "tasks" });
+      }
+      if (showBackground && draggedWidgetId !== "background") {
+        widgetsToCheck.push({ id: "background" });
+      }
+
+      // Para cada widget, verifica sobreposição usando posições reais do DOM
+      widgetsToCheck.forEach((widget) => {
+        const otherWidgetElement = document.querySelector(
+          `[data-widget-id="${widget.id}"]`
+        ) as HTMLElement;
+
+        if (!otherWidgetElement) return;
+
+        // Obtém posição real do DOM (não do estado)
+        const otherRect = otherWidgetElement.getBoundingClientRect();
+        const otherPosition = {
+          x: otherRect.left,
+          y: otherRect.top,
+        };
+
+        const otherSize = {
+          width: otherWidgetElement.offsetWidth,
+          height: otherWidgetElement.offsetHeight,
+        };
+
+        // Obtém posição do widget arrastado usando getBoundingClientRect
+        const draggedRect = draggedWidgetElement.getBoundingClientRect();
+        const draggedActualPosition = {
+          x: draggedRect.left,
+          y: draggedRect.top,
+        };
+
+        // Verifica se há sobreposição
+        if (
+          positionsOverlap(draggedActualPosition, otherPosition, draggedSize) ||
+          positionsOverlap(otherPosition, draggedActualPosition, otherSize)
+        ) {
+          // Encontra uma nova posição livre para o widget sobreposto
+          // Exclui o widget arrastado e o próprio widget da lista
+          const newPosition = getWidgetPosition(widget.id, true, true);
+
+          // Atualiza a posição do widget sobreposto
+          updateWidgetPosition(widget.id, newPosition);
+        }
+      });
+    });
+  };
+
   // Limpa posição quando widget fecha
   const clearWidgetPosition = (
     widgetId: "pomodoro" | "music" | "tasks" | "background"
@@ -291,23 +373,13 @@ const FocusApp = () => {
 
   const handleTaskStart = (task: Task) => {
     setActiveTask(task);
-    setTasks((prev) => prev.map((t) => ({ ...t, isActive: t.id === task.id })));
     if (!showPomodoro) {
       setShowPomodoro(true);
     }
   };
 
   const handleTaskComplete = () => {
-    if (activeTask) {
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === activeTask.id
-            ? { ...t, isActive: false, isCompleted: true }
-            : t
-        )
-      );
-      setActiveTask(null);
-    }
+    setActiveTask(null);
   };
 
   return (
@@ -356,6 +428,8 @@ const FocusApp = () => {
             widgetPositions["pomodoro"] || getWidgetPosition("pomodoro")
           }
           onPositionChange={(pos) => updateWidgetPosition("pomodoro", pos)}
+          onDragEnd={(pos) => handleDragEnd("pomodoro", pos)}
+          widgetId="pomodoro"
         />
       )}
 
@@ -369,6 +443,8 @@ const FocusApp = () => {
             widgetPositions["music"] || getWidgetPosition("music")
           }
           onPositionChange={(pos) => updateWidgetPosition("music", pos)}
+          onDragEnd={(pos) => handleDragEnd("music", pos)}
+          widgetId="music"
         />
       )}
 
@@ -378,13 +454,13 @@ const FocusApp = () => {
             setShowTasks(false);
             clearWidgetPosition("tasks");
           }}
-          tasks={tasks}
-          setTasks={setTasks}
           onTaskStart={handleTaskStart}
           defaultPosition={
             widgetPositions["tasks"] || getWidgetPosition("tasks")
           }
           onPositionChange={(pos) => updateWidgetPosition("tasks", pos)}
+          onDragEnd={(pos) => handleDragEnd("tasks", pos)}
+          widgetId="tasks"
         />
       )}
 
@@ -400,6 +476,8 @@ const FocusApp = () => {
             widgetPositions["background"] || getWidgetPosition("background")
           }
           onPositionChange={(pos) => updateWidgetPosition("background", pos)}
+          onDragEnd={(pos) => handleDragEnd("background", pos)}
+          widgetId="background"
         />
       )}
 

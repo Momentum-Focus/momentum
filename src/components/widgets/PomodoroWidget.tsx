@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw, X } from "lucide-react";
+import { Play, Pause, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DraggableWidget } from "./DraggableWidget";
 import { Task, PomodoroMode } from "../FocusApp";
+import { api } from "@/lib/api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 interface PomodoroWidgetProps {
   onClose: () => void;
@@ -10,6 +13,8 @@ interface PomodoroWidgetProps {
   onTaskComplete?: () => void;
   defaultPosition?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
+  onDragEnd?: (finalPosition: { x: number; y: number }) => void;
+  widgetId?: string;
 }
 
 const TIMER_DURATIONS = {
@@ -24,12 +29,82 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
   onTaskComplete,
   defaultPosition,
   onPositionChange,
+  onDragEnd,
+  widgetId,
 }) => {
   const [mode, setMode] = useState<PomodoroMode>("focus");
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATIONS.focus);
   const [isRunning, setIsRunning] = useState(false);
   const [cycleCount, setCycleCount] = useState(0);
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Mapear PomodoroMode do frontend para SessionType do backend
+  const mapModeToSessionType = (
+    mode: PomodoroMode
+  ): "FOCUS" | "SHORT_BREAK" | "LONG_BREAK" => {
+    switch (mode) {
+      case "focus":
+        return "FOCUS";
+      case "short-break":
+        return "SHORT_BREAK";
+      case "long-break":
+        return "LONG_BREAK";
+      default:
+        return "FOCUS";
+    }
+  };
+
+  const { mutate: createSession } = useMutation<
+    { id: number; typeSession: string },
+    Error,
+    { typeSession: "FOCUS" | "SHORT_BREAK" | "LONG_BREAK"; taskId?: number }
+  >({
+    mutationFn: (data) =>
+      api
+        .post("/study-sessions", {
+          typeSession: data.typeSession,
+          taskId: data.taskId,
+        })
+        .then((res) => res.data),
+    onSuccess: (data) => {
+      setActiveSessionId(data.id);
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao iniciar sessão",
+        description: "Não foi possível salvar o início da sessão no servidor.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { mutate: endSession } = useMutation<
+    any,
+    Error,
+    { id: number; durationMinutes: number }
+  >({
+    mutationFn: ({ id, durationMinutes }) =>
+      api
+        .patch(`/study-sessions/${id}`, {
+          endedAt: new Date().toISOString(),
+          durationMinutes: durationMinutes,
+        })
+        .then((res) => res.data),
+    onSuccess: () => {
+      setActiveSessionId(null);
+      queryClient.invalidateQueries({ queryKey: ["dailyLogs"] });
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao finalizar sessão",
+        description: "Não foi possível salvar o fim da sessão no servidor.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Use custom durations from task if available
   const getTimerDuration = (currentMode: PomodoroMode) => {
@@ -70,6 +145,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
     if (timeLeft === 0 && isRunning) {
       setIsRunning(false);
 
+      // Finalizar sessão quando o timer termina
+      if (activeSessionId) {
+        const duration = Math.floor(getTimerDuration(mode) / 60);
+        endSession({ id: activeSessionId, durationMinutes: duration });
+      }
+
       if (mode === "focus") {
         setCycleCount((prev) => prev + 1);
 
@@ -92,21 +173,60 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
         setMode("focus");
       }
     }
-  }, [timeLeft, isRunning, mode, cycleCount, activeTask, onTaskComplete]);
+  }, [
+    timeLeft,
+    isRunning,
+    mode,
+    cycleCount,
+    activeTask,
+    onTaskComplete,
+    activeSessionId,
+    endSession,
+  ]);
 
   const handlePlayPause = () => {
-    setIsRunning(!isRunning);
+    if (isRunning) {
+      // Pausar - finalizar sessão atual
+      setIsRunning(false);
+      if (activeSessionId) {
+        const duration = Math.floor((getTimerDuration(mode) - timeLeft) / 60);
+        endSession({ id: activeSessionId, durationMinutes: duration });
+      }
+    } else {
+      // Iniciar - criar nova sessão
+      setIsRunning(true);
+      const taskId =
+        activeTask && mode === "focus" && !isNaN(parseInt(activeTask.id))
+          ? parseInt(activeTask.id)
+          : undefined;
+
+      createSession({
+        typeSession: mapModeToSessionType(mode),
+        taskId,
+      });
+    }
   };
 
   const handleReset = () => {
+    if (isRunning && activeSessionId) {
+      const duration = Math.floor((getTimerDuration(mode) - timeLeft) / 60);
+      endSession({ id: activeSessionId, durationMinutes: duration });
+    }
     setIsRunning(false);
     setTimeLeft(getTimerDuration(mode));
+    setActiveSessionId(null);
   };
 
   const handleModeChange = (newMode: PomodoroMode) => {
+    // Se estava rodando, finalizar a sessão atual
+    if (isRunning && activeSessionId) {
+      const duration = Math.floor((getTimerDuration(mode) - timeLeft) / 60);
+      endSession({ id: activeSessionId, durationMinutes: duration });
+    }
     setMode(newMode);
     setIsRunning(false);
     setTimeLeft(getTimerDuration(newMode));
+    setActiveSessionId(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -150,6 +270,8 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
       className="w-80"
       defaultPosition={defaultPosition}
       onPositionChange={onPositionChange}
+      onDragEnd={onDragEnd}
+      widgetId={widgetId}
     >
       <div className={`p-6 ${getModeBackground()} rounded-t-lg`}>
         {activeTask && (
