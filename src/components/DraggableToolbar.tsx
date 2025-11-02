@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Timer, Music, CheckSquare, Palette } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import React, { useRef, useState, useEffect, useCallback } from "react";
+import { Timer, Music, CheckSquare, Palette } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface DraggableToolbarProps {
   onOpenPomodoro: () => void;
@@ -17,82 +17,104 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   onOpenBackground,
 }) => {
   const [position, setPosition] = useState(() => {
-    const saved = localStorage.getItem('toolbar-position');
-    return saved ? JSON.parse(saved) : { x: window.innerWidth / 2 - 200, y: window.innerHeight - 100 };
+    const saved = localStorage.getItem("toolbar-position");
+    return saved
+      ? JSON.parse(saved)
+      : { x: window.innerWidth / 2 - 200, y: window.innerHeight - 100 };
   });
   const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.target instanceof HTMLElement && 
-        (e.target.tagName === 'BUTTON' || e.target.closest('button'))) {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (
+      e.target instanceof HTMLElement &&
+      (e.target.tagName === "BUTTON" || e.target.closest("button"))
+    ) {
       return; // Don't start dragging if clicking on buttons
     }
 
     setIsDragging(true);
     const rect = toolbarRef.current?.getBoundingClientRect();
     if (rect) {
-      setDragOffset({
+      dragOffsetRef.current = {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
-      });
+      };
     }
-  };
+  }, []);
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
 
-    const newX = e.clientX - dragOffset.x;
-    const newY = e.clientY - dragOffset.y;
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const newX = e.clientX - dragOffsetRef.current.x;
+      const newY = e.clientY - dragOffsetRef.current.y;
 
-    // Keep toolbar within viewport bounds
-    const maxX = window.innerWidth - (toolbarRef.current?.offsetWidth || 400);
-    const maxY = window.innerHeight - (toolbarRef.current?.offsetHeight || 80);
+      // Keep toolbar within viewport bounds
+      const toolbarWidth = toolbarRef.current?.offsetWidth || 400;
+      const toolbarHeight = toolbarRef.current?.offsetHeight || 80;
+      const maxX = window.innerWidth - toolbarWidth;
+      const maxY = window.innerHeight - toolbarHeight;
 
-    const constrainedPosition = {
-      x: Math.max(0, Math.min(newX, maxX)),
-      y: Math.max(0, Math.min(newY, maxY)),
-    };
+      const constrainedPosition = {
+        x: Math.max(0, Math.min(newX, maxX)),
+        y: Math.max(0, Math.min(newY, maxY)),
+      };
 
-    setPosition(constrainedPosition);
-    localStorage.setItem('toolbar-position', JSON.stringify(constrainedPosition));
-  };
+      setPosition(constrainedPosition);
+      localStorage.setItem(
+        "toolbar-position",
+        JSON.stringify(constrainedPosition)
+      );
+    });
+  }, []);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
     };
-  }, [isDragging, dragOffset]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // Handle window resize to keep toolbar in bounds
   useEffect(() => {
     const handleResize = () => {
       const maxX = window.innerWidth - (toolbarRef.current?.offsetWidth || 400);
-      const maxY = window.innerHeight - (toolbarRef.current?.offsetHeight || 80);
-      
-      setPosition(prev => {
+      const maxY =
+        window.innerHeight - (toolbarRef.current?.offsetHeight || 80);
+
+      setPosition((prev) => {
         const newPosition = {
           x: Math.max(0, Math.min(prev.x, maxX)),
           y: Math.max(0, Math.min(prev.y, maxY)),
         };
-        localStorage.setItem('toolbar-position', JSON.stringify(newPosition));
+        localStorage.setItem("toolbar-position", JSON.stringify(newPosition));
         return newPosition;
       });
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   return (
