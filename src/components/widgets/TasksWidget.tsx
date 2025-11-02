@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
-import { Plus, Play, Check, Trash2, CheckSquare } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { DraggableWidget } from './DraggableWidget';
-import { Task } from '../FocusApp';
-import { useToast } from '@/hooks/use-toast';
+import React, { useState } from "react";
+import { Plus, Play, Check, Trash2, CheckSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { DraggableWidget } from "./DraggableWidget";
+import { Task } from "../FocusApp";
+import { useToast } from "@/hooks/use-toast";
 
 interface TasksWidgetProps {
   onClose: () => void;
   tasks: Task[];
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   onTaskStart: (task: Task) => void;
+  defaultPosition?: { x: number; y: number };
+  onPositionChange?: (position: { x: number; y: number }) => void;
 }
 
 export const TasksWidget: React.FC<TasksWidgetProps> = ({
@@ -20,20 +22,22 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
   tasks,
   setTasks,
   onTaskStart,
+  defaultPosition,
+  onPositionChange,
 }) => {
   const [showForm, setShowForm] = useState(false);
-  const [taskName, setTaskName] = useState('');
-  const [estimatedTime, setEstimatedTime] = useState('');
-  const [cycles, setCycles] = useState('');
-  const [breakDuration, setBreakDuration] = useState('');
-  const [breakCount, setBreakCount] = useState('');
+  const [taskName, setTaskName] = useState("");
+  const [estimatedTime, setEstimatedTime] = useState("");
+  const [cycles, setCycles] = useState("");
+  const [breakDuration, setBreakDuration] = useState("");
+  const [breakCount, setBreakCount] = useState("");
   const { toast } = useToast();
 
   const showAdvancedFields = parseInt(estimatedTime) > 30;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!taskName.trim() || !estimatedTime) {
       toast({
         title: "Campos obrigatórios",
@@ -47,7 +51,8 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
     if (showAdvancedFields && (!cycles || !breakDuration || !breakCount)) {
       toast({
         title: "Campos obrigatórios",
-        description: "Para tarefas acima de 30 minutos, todos os campos de configuração do Pomodoro são obrigatórios.",
+        description:
+          "Para tarefas acima de 30 minutos, todos os campos de configuração do Pomodoro são obrigatórios.",
         variant: "destructive",
       });
       return;
@@ -64,27 +69,29 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
       }),
     };
 
-    setTasks(prev => [...prev, newTask]);
-    
+    setTasks((prev) => [...prev, newTask]);
+
     // Reset form
-    setTaskName('');
-    setEstimatedTime('');
-    setCycles('');
-    setBreakDuration('');
-    setBreakCount('');
+    setTaskName("");
+    setEstimatedTime("");
+    setCycles("");
+    setBreakDuration("");
+    setBreakCount("");
     setShowForm(false);
   };
 
   const handleDeleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId));
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
   };
 
   const handleCompleteTask = (taskId: string) => {
-    setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? { ...task, isCompleted: true, isActive: false }
-        : task
-    ));
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? { ...task, isCompleted: true, isActive: false }
+          : task
+      )
+    );
   };
 
   return (
@@ -92,6 +99,8 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
       title="Gestão de Tarefas"
       onClose={onClose}
       className="w-96 max-h-[80vh] overflow-hidden"
+      defaultPosition={defaultPosition}
+      onPositionChange={onPositionChange}
     >
       <div className="p-6 space-y-4">
         {/* Add Task Button */}
@@ -107,7 +116,10 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
 
         {/* Add Task Form */}
         {showForm && (
-          <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-gradient-subtle rounded-lg border border-widget-border">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4 p-4 bg-gradient-subtle rounded-lg border border-widget-border"
+          >
             <div>
               <Label htmlFor="taskName">Nome da Tarefa</Label>
               <Input
@@ -120,7 +132,9 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
             </div>
 
             <div>
-              <Label htmlFor="estimatedTime">Estimativa de Tempo (minutos)</Label>
+              <Label htmlFor="estimatedTime">
+                Estimativa de Tempo (minutos)
+              </Label>
               <Input
                 id="estimatedTime"
                 type="number"
@@ -138,7 +152,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
                 <p className="text-sm text-muted-foreground">
                   ⚡ Tarefa longa detectada! Configure os ciclos Pomodoro:
                 </p>
-                
+
                 <div>
                   <Label htmlFor="cycles">Quantos Ciclos Pomodoro? *</Label>
                   <Input
@@ -154,7 +168,9 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="breakDuration">Duração da Pausa (min) *</Label>
+                    <Label htmlFor="breakDuration">
+                      Duração da Pausa (min) *
+                    </Label>
                     <Input
                       id="breakDuration"
                       type="number"
@@ -201,21 +217,29 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
           <>
             <Separator />
             <div className="space-y-3 max-h-80 overflow-y-auto">
-              <h3 className="text-sm font-medium text-muted-foreground">Suas Tarefas</h3>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Suas Tarefas
+              </h3>
               {tasks.map((task) => (
                 <div
                   key={task.id}
                   className={`p-3 rounded-lg border transition-all ${
                     task.isCompleted
-                      ? 'bg-success/10 border-success/20'
+                      ? "bg-success/10 border-success/20"
                       : task.isActive
-                      ? 'bg-primary/10 border-primary/30 ring-2 ring-primary/20'
-                      : 'bg-widget-background border-widget-border hover:border-primary/30'
+                      ? "bg-primary/10 border-primary/30 ring-2 ring-primary/20"
+                      : "bg-widget-background border-widget-border hover:border-primary/30"
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h4 className={`font-medium ${task.isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                      <h4
+                        className={`font-medium ${
+                          task.isCompleted
+                            ? "line-through text-muted-foreground"
+                            : "text-foreground"
+                        }`}
+                      >
                         {task.name}
                       </h4>
                       <p className="text-sm text-muted-foreground">
@@ -223,7 +247,9 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
                         {task.cycles && ` • ${task.cycles} ciclos`}
                       </p>
                       {task.isActive && (
-                        <p className="text-xs text-primary font-medium">🎯 Ativa</p>
+                        <p className="text-xs text-primary font-medium">
+                          🎯 Ativa
+                        </p>
                       )}
                     </div>
 
@@ -238,7 +264,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
                           <Play className="h-3 w-3" />
                         </Button>
                       )}
-                      
+
                       {!task.isCompleted && (
                         <Button
                           size="sm"
@@ -270,7 +296,9 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
           <div className="text-center py-8 text-muted-foreground">
             <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>Nenhuma tarefa criada ainda.</p>
-            <p className="text-sm">Adicione sua primeira tarefa para começar!</p>
+            <p className="text-sm">
+              Adicione sua primeira tarefa para começar!
+            </p>
           </div>
         )}
       </div>

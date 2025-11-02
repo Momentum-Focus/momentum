@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Volume2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { DraggableWidget } from './DraggableWidget';
+import React, { useState } from "react";
+import { Play, Pause, SkipForward, SkipBack, Volume2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { DraggableWidget } from "./DraggableWidget";
 
 interface MusicWidgetProps {
   onClose: () => void;
+  defaultPosition?: { x: number; y: number };
+  onPositionChange?: (position: { x: number; y: number }) => void;
 }
 
-export const MusicWidget: React.FC<MusicWidgetProps> = ({ onClose }) => {
+export const MusicWidget: React.FC<MusicWidgetProps> = ({
+  onClose,
+  defaultPosition,
+  onPositionChange,
+}) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState([75]);
-  const [currentTrack] = useState('Sons da Natureza - Chuva');
+  const [currentTrack] = useState("Sons da Natureza - Chuva");
 
   const handlePlayPause = () => {
     setIsPlaying(!isPlaying);
@@ -22,16 +28,20 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({ onClose }) => {
       title="Player de Música"
       onClose={onClose}
       className="w-80"
+      defaultPosition={defaultPosition}
+      onPositionChange={onPositionChange}
     >
       <div className="p-6 space-y-6">
         {/* Platform Connections */}
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground">Conectar Plataformas</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">
+            Conectar Plataformas
+          </h3>
           <div className="space-y-2">
             <Button
               variant="outline"
               className="w-full justify-start gap-3 h-12"
-              onClick={() => alert('Conectar com Spotify em breve!')}
+              onClick={() => alert("Conectar com Spotify em breve!")}
             >
               <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
                 <span className="text-white text-xs font-bold">S</span>
@@ -41,7 +51,7 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({ onClose }) => {
             <Button
               variant="outline"
               className="w-full justify-start gap-3 h-12"
-              onClick={() => alert('Conectar com YouTube Music em breve!')}
+              onClick={() => alert("Conectar com YouTube Music em breve!")}
             >
               <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
                 <span className="text-white text-xs font-bold">Y</span>
@@ -65,7 +75,7 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({ onClose }) => {
           <Button variant="ghost" size="lg">
             <SkipBack className="h-5 w-5" />
           </Button>
-          
+
           <Button
             onClick={handlePlayPause}
             size="lg"
@@ -100,7 +110,9 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({ onClose }) => {
 
         {/* Preset Sounds */}
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground">Sons de Foco</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">
+            Sons de Foco
+          </h3>
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" size="sm" className="text-xs">
               🌧️ Chuva
