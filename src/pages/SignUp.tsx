@@ -67,24 +67,26 @@ const SignUp = () => {
 
     onError: (error: any) => {
       console.error("Erro ao criar conta:", error);
-      
+
       let errorMessage = "Ocorreu um erro ao criar sua conta. Tente novamente.";
-      
+
       if (error.response?.data) {
         const errorData = error.response.data;
-        
+
         // Mensagem específica do backend
         if (errorData.message) {
           errorMessage = errorData.message;
         }
         // Detalhes adicionais se disponíveis
         else if (errorData.error) {
-          errorMessage = `${errorData.error}${errorData.details ? `: ${errorData.details}` : ''}`;
+          errorMessage = `${errorData.error}${
+            errorData.details ? `: ${errorData.details}` : ""
+          }`;
         }
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast({
         title: "Erro ao criar conta",
         description: errorMessage,
