@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { Timer, Music, CheckSquare, Palette } from "lucide-react";
+import { Timer, Music, CheckSquare, Palette, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +8,7 @@ interface DraggableToolbarProps {
   onOpenMusic: () => void;
   onOpenTasks: () => void;
   onOpenBackground: () => void;
+  onOpenProfile: () => void;
 }
 
 export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
@@ -15,6 +16,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   onOpenMusic,
   onOpenTasks,
   onOpenBackground,
+  onOpenProfile,
 }) => {
   const [position, setPosition] = useState(() => {
     const saved = localStorage.getItem("toolbar-position");
@@ -167,6 +169,16 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
         >
           <Palette className="h-5 w-5 group-hover:scale-110 transition-transform" />
           <span className="text-xs font-medium">Fundo</span>
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onOpenProfile}
+          className="flex flex-col items-center gap-1 h-auto py-2 px-3 hover:bg-primary/10 hover:text-primary transition-smooth group cursor-pointer"
+        >
+          <User className="h-5 w-5 group-hover:scale-110 transition-transform" />
+          <span className="text-xs font-medium">Perfil</span>
         </Button>
       </div>
     </div>

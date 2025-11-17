@@ -4,6 +4,7 @@ import { PomodoroWidget } from "./widgets/PomodoroWidget";
 import { MusicWidget } from "./widgets/MusicWidget";
 import { TasksWidget } from "./widgets/TasksWidget";
 import { BackgroundSelector } from "./BackgroundSelector";
+import { ProfileModal } from "./ProfileModal";
 import momentumLogo from "@/assets/momentum-logo.png";
 
 export interface Task {
@@ -24,6 +25,7 @@ const FocusApp = () => {
   const [showMusic, setShowMusic] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [showBackground, setShowBackground] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [currentBackground, setCurrentBackground] = useState<string>("");
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -485,8 +487,6 @@ const FocusApp = () => {
       <DraggableToolbar
         onOpenPomodoro={() => {
           if (!showPomodoro) {
-            // Calcula e salva a posição inicial ANTES de abrir
-            // Force recalcula para garantir que não sobreponha
             const initialPos = getWidgetPosition("pomodoro", true, true);
             setWidgetPositions((prev) => ({
               ...prev,
@@ -525,7 +525,11 @@ const FocusApp = () => {
           }
           setShowBackground(true);
         }}
+        onOpenProfile={() => setShowProfile(true)}
       />
+
+      {/* Profile Modal */}
+      <ProfileModal open={showProfile} onOpenChange={setShowProfile} />
     </div>
   );
 };
