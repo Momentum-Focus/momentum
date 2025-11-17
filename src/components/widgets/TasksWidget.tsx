@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Play, Check, Trash2, CheckSquare, Loader2 } from "lucide-react";
+import { Plus, Play, Check, Trash2, CheckSquare, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Task } from "../FocusApp";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { TaskDetailsModal } from "../TaskDetailsModal";
 
 interface TasksWidgetProps {
   onClose: () => void;
@@ -69,6 +70,8 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
   const [cycles, setCycles] = useState("");
   const [breakDuration, setBreakDuration] = useState("");
   const [breakCount, setBreakCount] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [showTaskDetails, setShowTaskDetails] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -232,7 +235,6 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
     if (!isNaN(numericId)) {
       updateTask({ id: numericId, data: { isCompleted: true } });
     } else if (externalSetTasks) {
-      // Se o ID não é numérico, está usando estado local
       externalSetTasks((prev) =>
         prev.map((task) =>
           task.id === taskId
@@ -240,6 +242,14 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
             : task
         )
       );
+    }
+  };
+
+  const handleViewTaskDetails = (taskId: string) => {
+    const numericId = parseInt(taskId);
+    if (!isNaN(numericId)) {
+      setSelectedTaskId(numericId);
+      setShowTaskDetails(true);
     }
   };
 
@@ -430,6 +440,15 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
                     </div>
 
                     <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleViewTaskDetails(task.id)}
+                        className="hover:bg-primary/10"
+                        title="Ver detalhes"
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
                       {!task.isCompleted && !task.isActive && (
                         <Button
                           size="sm"
@@ -478,6 +497,17 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
           </div>
         )}
       </div>
+      <TaskDetailsModal
+        taskId={selectedTaskId}
+        open={showTaskDetails}
+        onOpenChange={(open) => {
+          setShowTaskDetails(open);
+          if (!open) {
+            setSelectedTaskId(null);
+            queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          }
+        }}
+      />
     </DraggableWidget>
   );
 };
