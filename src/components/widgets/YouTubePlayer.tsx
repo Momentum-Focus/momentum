@@ -1,9 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Play, Pause, SkipForward, SkipBack, Volume2, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Input } from "@/components/ui/input";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import React, { useState } from "react";
+import { Play, Pause, SkipForward, SkipBack, Search } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -13,18 +10,11 @@ interface YouTubePlayerProps {
 
 export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ onDisconnect }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState([75]);
+  const [volume, setVolume] = useState(75);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentVideo, setCurrentVideo] = useState<any>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const { toast } = useToast();
-
-  const { data: playlists } = useQuery<any[]>({
-    queryKey: ["youtubePlaylists"],
-    queryFn: () => api.get("/media/youtube/playlists").then((res) => res.data),
-    retry: 1,
-    enabled: false, // Só busca quando necessário
-  });
 
   const { mutate: searchYouTube, isPending: isSearching } = useMutation({
     mutationFn: (query: string) =>
@@ -93,19 +83,24 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ onDisconnect }) =>
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Search Bar */}
       <div className="flex gap-2">
-        <Input
+        <input
+          type="text"
           placeholder="Buscar música no YouTube..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          className="flex-1"
+          className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white/90 placeholder:text-white/30 focus:outline-none focus:border-blue-500 transition-colors"
         />
-        <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim()}>
-          <Search className="h-4 w-4" />
-        </Button>
+        <button
+          onClick={handleSearch}
+          disabled={isSearching || !searchQuery.trim()}
+          className="h-10 w-10 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white"
+        >
+          <Search className="h-4 w-4" strokeWidth={1.5} />
+        </button>
       </div>
 
       {/* Search Results */}
@@ -115,16 +110,18 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ onDisconnect }) =>
             <button
               key={video.id}
               onClick={() => handleSelectVideo(video)}
-              className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors text-left"
+              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-black/20 transition-colors text-left border border-white/10"
             >
               <img
                 src={video.thumbnail}
                 alt={video.title}
-                className="w-16 h-16 rounded object-cover"
+                className="w-16 h-16 rounded-lg object-cover"
               />
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{video.title}</p>
-                <p className="text-xs text-muted-foreground truncate">
+                <p className="font-medium text-sm text-white/90 truncate">
+                  {video.title}
+                </p>
+                <p className="text-xs text-white/50 truncate font-light">
                   {video.channelTitle}
                 </p>
               </div>
@@ -135,22 +132,18 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ onDisconnect }) =>
 
       {/* Current Track */}
       {currentVideo && (
-        <div className="text-center py-4 bg-gradient-subtle rounded-lg border border-widget-border">
-          <div className="w-16 h-16 bg-primary/20 rounded-full mx-auto mb-3 flex items-center justify-center overflow-hidden">
-            {currentVideo.thumbnail ? (
-              <img
-                src={currentVideo.thumbnail}
-                alt={currentVideo.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <Volume2 className="h-8 w-8 text-primary" />
-            )}
-          </div>
-          <h4 className="font-medium text-foreground truncate px-2">
+        <div className="text-center py-6 rounded-xl border border-white/10 bg-black/20">
+          {currentVideo.thumbnail && (
+            <img
+              src={currentVideo.thumbnail}
+              alt={currentVideo.title}
+              className="w-20 h-20 rounded-xl mx-auto mb-3 object-cover"
+            />
+          )}
+          <h4 className="text-lg font-medium text-white/90 truncate px-2 mb-1">
             {currentVideo.title}
           </h4>
-          <p className="text-sm text-muted-foreground truncate px-2">
+          <p className="text-sm text-white/50 truncate px-2 font-light">
             {currentVideo.channelTitle || "YouTube Music"}
           </p>
         </div>
@@ -158,66 +151,65 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ onDisconnect }) =>
 
       {/* Controls */}
       <div className="flex items-center justify-center gap-4">
-        <Button variant="ghost" size="lg" disabled={!currentVideo}>
-          <SkipBack className="h-5 w-5" />
-        </Button>
+        <button
+          className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white/90 disabled:opacity-50"
+          disabled={!currentVideo}
+        >
+          <SkipBack className="h-5 w-5" strokeWidth={1.5} />
+        </button>
 
-        <Button
+        <button
           onClick={handlePlayPause}
-          size="lg"
-          className="bg-gradient-primary hover:bg-primary-hover"
+          className="h-12 w-12 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 transition-colors flex items-center justify-center text-white"
           disabled={!currentVideo && searchResults.length === 0}
         >
           {isPlayingVideo ? (
             <div className="h-6 w-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : isPlaying ? (
-            <Pause className="h-6 w-6" />
+            <Pause className="h-6 w-6" strokeWidth={2} fill="currentColor" />
           ) : (
-            <Play className="h-6 w-6" />
+            <Play className="h-6 w-6 ml-0.5" strokeWidth={2} fill="currentColor" />
           )}
-        </Button>
+        </button>
 
-        <Button variant="ghost" size="lg" disabled={!currentVideo}>
-          <SkipForward className="h-5 w-5" />
-        </Button>
+        <button
+          className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white/90 disabled:opacity-50"
+          disabled={!currentVideo}
+        >
+          <SkipForward className="h-5 w-5" strokeWidth={1.5} />
+        </button>
       </div>
 
       {/* Volume Control */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Volume</span>
-          <span className="text-sm text-foreground">{volume[0]}%</span>
+          <span className="text-xs text-white/50 font-light">Volume</span>
+          <span className="text-xs text-white/90 font-light">{volume}%</span>
         </div>
-        <Slider
-          value={volume}
-          onValueChange={setVolume}
-          max={100}
-          step={1}
-          className="w-full"
-        />
-      </div>
-
-      {/* Video Embed (se disponível) */}
-      {currentVideo && currentVideo.embedUrl && (
-        <div className="aspect-video rounded-lg overflow-hidden border border-widget-border">
-          <iframe
-            src={`${currentVideo.embedUrl}?autoplay=${isPlaying ? 1 : 0}&mute=${volume[0] === 0 ? 1 : 0}`}
-            className="w-full h-full"
-            allow="autoplay; encrypted-media"
-            title={currentVideo.title}
+        <div className="relative h-1 bg-white/10 rounded-full group">
+          <div
+            className="absolute h-full bg-blue-500 rounded-full transition-all"
+            style={{ width: `${volume}%` }}
+          />
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={volume}
+            onChange={(e) => setVolume(parseInt(e.target.value))}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
         </div>
-      )}
+      </div>
 
       {/* Disconnect Button */}
       {onDisconnect && (
-        <Button
-          variant="outline"
-          className="w-full"
+        <button
           onClick={onDisconnect}
+          className="w-full px-4 py-2 rounded-xl bg-transparent hover:bg-red-500/20 text-red-400 font-medium transition-colors border border-red-500/30"
         >
           Desconectar YouTube Music
-        </Button>
+        </button>
       )}
     </div>
   );

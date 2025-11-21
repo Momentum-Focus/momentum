@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw } from "lucide-react";
-import { DraggableWidget } from "./DraggableWidget";
+import { WidgetContainer } from "./WidgetContainer";
 import { Task, PomodoroMode } from "../FocusApp";
 import { api } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { motion } from "framer-motion";
+import { useFocusSettings } from "@/hooks/use-focus-settings";
 
-interface PomodoroWidgetProps {
+interface TimerWidgetProps {
   onClose: () => void;
   activeTask?: Task | null;
   onTaskComplete?: () => void;
@@ -16,13 +18,7 @@ interface PomodoroWidgetProps {
   widgetId?: string;
 }
 
-const TIMER_DURATIONS = {
-  focus: 25 * 60, // 25 minutes
-  "short-break": 5 * 60, // 5 minutes
-  "long-break": 15 * 60, // 15 minutes
-};
-
-export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
+export const TimerWidget: React.FC<TimerWidgetProps> = ({
   onClose,
   activeTask,
   onTaskComplete,
@@ -31,8 +27,9 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
   onDragEnd,
   widgetId,
 }) => {
+  const { data: focusSettings } = useFocusSettings();
   const [mode, setMode] = useState<PomodoroMode>("focus");
-  const [timeLeft, setTimeLeft] = useState(TIMER_DURATIONS.focus);
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [cycleCount, setCycleCount] = useState(0);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -40,20 +37,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Mapear PomodoroMode do frontend para SessionType do backend
   const mapModeToSessionType = (
     mode: PomodoroMode
   ): "FOCUS" | "SHORT_BREAK" | "LONG_BREAK" => {
-    switch (mode) {
-      case "focus":
-        return "FOCUS";
-      case "short-break":
-        return "SHORT_BREAK";
-      case "long-break":
-        return "LONG_BREAK";
-      default:
-        return "FOCUS";
-    }
+    if (mode === "focus") return "FOCUS";
+    if (mode === "short-break") return "SHORT_BREAK";
+    return "LONG_BREAK";
   };
 
   const { mutate: createSession } = useMutation<
@@ -105,7 +94,16 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
     },
   });
 
-  // Use custom durations from task if available
+  const getBaseDuration = (currentMode: PomodoroMode) => {
+    if (currentMode === "focus") {
+      return (focusSettings?.focusDurationMinutes ?? 25) * 60;
+    }
+    if (currentMode === "short-break") {
+      return (focusSettings?.shortBreakDurationMinutes ?? 5) * 60;
+    }
+    return (focusSettings?.longBreakDurationMinutes ?? 15) * 60;
+  };
+
   const getTimerDuration = (currentMode: PomodoroMode) => {
     if (activeTask && currentMode === "focus") {
       return activeTask.estimatedTime * 60;
@@ -113,12 +111,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
     if (activeTask && currentMode === "short-break") {
       return (activeTask.breakDuration || 5) * 60;
     }
-    return TIMER_DURATIONS[currentMode];
+    return getBaseDuration(currentMode);
   };
 
   useEffect(() => {
     setTimeLeft(getTimerDuration(mode));
-  }, [mode, activeTask]);
+  }, [mode, activeTask, focusSettings]);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
@@ -139,12 +137,10 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
     };
   }, [isRunning, timeLeft]);
 
-  // Handle timer completion
   useEffect(() => {
     if (timeLeft === 0 && isRunning) {
       setIsRunning(false);
 
-      // Finalizar sessão quando o timer termina
       if (activeSessionId) {
         const duration = Math.floor(getTimerDuration(mode) / 60);
         endSession({ id: activeSessionId, durationMinutes: duration });
@@ -153,7 +149,6 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
       if (mode === "focus") {
         setCycleCount((prev) => prev + 1);
 
-        // Check if task is completed based on cycles
         if (
           activeTask &&
           activeTask.cycles &&
@@ -163,12 +158,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
           return;
         }
 
-        // Auto-switch to break
-        const nextMode =
-          (cycleCount + 1) % 4 === 0 ? "long-break" : "short-break";
+    const cycleThreshold = focusSettings?.cyclesBeforeLongBreak ?? 4;
+    const shouldTakeLongBreak =
+      (cycleCount + 1) % Math.max(1, cycleThreshold) === 0;
+    const nextMode = shouldTakeLongBreak ? "long-break" : "short-break";
         setMode(nextMode);
       } else {
-        // Auto-switch back to focus
         setMode("focus");
       }
     }
@@ -185,14 +180,12 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
 
   const handlePlayPause = () => {
     if (isRunning) {
-      // Pausar - finalizar sessão atual
       setIsRunning(false);
       if (activeSessionId) {
         const duration = Math.floor((getTimerDuration(mode) - timeLeft) / 60);
         endSession({ id: activeSessionId, durationMinutes: duration });
       }
     } else {
-      // Iniciar - criar nova sessão
       setIsRunning(true);
       const taskId =
         activeTask && mode === "focus" && !isNaN(parseInt(activeTask.id))
@@ -217,7 +210,6 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
   };
 
   const handleModeChange = (newMode: PomodoroMode) => {
-    // Se estava rodando, finalizar a sessão atual
     if (isRunning && activeSessionId) {
       const duration = Math.floor((getTimerDuration(mode) - timeLeft) / 60);
       endSession({ id: activeSessionId, durationMinutes: duration });
@@ -237,36 +229,16 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
   };
 
   const getModeColor = () => {
-    switch (mode) {
-      case "focus":
-        return "text-focus";
-      case "short-break":
-        return "text-break";
-      case "long-break":
-        return "text-long-break";
-      default:
-        return "text-focus";
-    }
-  };
-
-  const getModeBackground = () => {
-    switch (mode) {
-      case "focus":
-        return "bg-focus/10";
-      case "short-break":
-        return "bg-break/10";
-      case "long-break":
-        return "bg-long-break/10";
-      default:
-        return "bg-focus/10";
-    }
+    if (mode === "focus") return "text-blue-400";
+    if (mode === "short-break") return "text-green-400";
+    return "text-yellow-400";
   };
 
   return (
-    <DraggableWidget
+    <WidgetContainer
       title="Timer Pomodoro"
       onClose={onClose}
-      className="w-80"
+      className="w-96"
       defaultPosition={defaultPosition}
       onPositionChange={onPositionChange}
       onDragEnd={onDragEnd}
@@ -274,15 +246,15 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
     >
       <div className="p-8">
         {activeTask && (
-          <div className="mb-6 p-4 rounded-lg border border-white/10 bg-white/5">
-            <p className="text-xs zen-text-muted mb-1" style={{ fontWeight: 400 }}>
+          <div className="mb-6 p-4 rounded-xl border border-white/10 bg-black/20">
+            <p className="text-xs text-white/50 mb-1 font-light uppercase tracking-wider">
               Tarefa Ativa:
             </p>
-            <p className="text-sm zen-text-ghost mb-1" style={{ fontWeight: 500 }}>
+            <p className="text-sm text-white/90 mb-1 font-medium">
               {activeTask.name}
             </p>
             {activeTask.cycles && (
-              <p className="text-xs zen-text-muted" style={{ fontWeight: 400 }}>
+              <p className="text-xs text-white/50 font-light">
                 Ciclo {cycleCount + 1} de {activeTask.cycles}
               </p>
             )}
@@ -290,72 +262,76 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
         )}
 
         <div className="text-center">
-          <div
-            className={`text-7xl mb-6 zen-accent ${
-              isRunning ? "animate-pulse" : ""
-            }`}
-            style={{ fontWeight: 200, letterSpacing: "-0.05em" }}
+          {/* Timer Display */}
+          <motion.div
+            className={`text-7xl font-thin mb-8 ${getModeColor()}`}
+            animate={isRunning ? { scale: [1, 1.02, 1] } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
           >
             {formatTime(timeLeft)}
-          </div>
+          </motion.div>
 
-          <div className="flex gap-2 mb-8 justify-center">
+          {/* Segmented Control */}
+          <div className="flex gap-1 mb-8 p-1 bg-black/20 rounded-xl">
             <button
               onClick={() => handleModeChange("focus")}
-              className={`px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 ${
+              className={`flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                 mode === "focus"
-                  ? "bg-[#4ade80] text-[#121212]"
-                  : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80"
+                  ? "bg-blue-500 text-white"
+                  : "text-white/50 hover:text-white/80"
               }`}
-              style={{ fontWeight: 500 }}
             >
               Foco
             </button>
             <button
               onClick={() => handleModeChange("short-break")}
-              className={`px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 ${
+              className={`flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                 mode === "short-break"
-                  ? "bg-[#4ade80] text-[#121212]"
-                  : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80"
+                  ? "bg-green-500 text-white"
+                  : "text-white/50 hover:text-white/80"
               }`}
-              style={{ fontWeight: 500 }}
             >
               Pausa
             </button>
             <button
               onClick={() => handleModeChange("long-break")}
-              className={`px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 ${
+              className={`flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                 mode === "long-break"
-                  ? "bg-[#4ade80] text-[#121212]"
-                  : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80"
+                  ? "bg-yellow-500 text-white"
+                  : "text-white/50 hover:text-white/80"
               }`}
-              style={{ fontWeight: 500 }}
             >
-              Pausa Longa
+              Longa
             </button>
           </div>
 
+          {/* Controls */}
           <div className="flex gap-3 justify-center">
-            <button
+            <motion.button
               onClick={handlePlayPause}
-              className="h-12 w-12 rounded-full bg-[#4ade80] hover:bg-[#22c55e] transition-colors flex items-center justify-center text-[#121212] shadow-lg shadow-[#4ade80]/20"
+              className="h-16 w-16 rounded-full bg-blue-500 hover:bg-blue-600 transition-colors flex items-center justify-center text-white shadow-lg shadow-blue-500/30"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
               {isRunning ? (
-                <Pause className="h-5 w-5" strokeWidth={2} fill="currentColor" />
+                <Pause className="h-6 w-6" strokeWidth={2} fill="currentColor" />
               ) : (
-                <Play className="h-5 w-5 ml-0.5" strokeWidth={2} fill="currentColor" />
+                <Play className="h-6 w-6 ml-0.5" strokeWidth={2} fill="currentColor" />
               )}
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
               onClick={handleReset}
-              className="h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center zen-text-ghost border border-white/10"
+              className="h-16 w-16 rounded-full bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center text-white/90 border border-white/10"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
               <RotateCcw className="h-5 w-5" strokeWidth={1.5} />
-            </button>
+            </motion.button>
           </div>
         </div>
       </div>
-    </DraggableWidget>
+    </WidgetContainer>
   );
 };
+

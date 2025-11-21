@@ -11,6 +11,8 @@ import NotFound from "./pages/NotFound";
 import SpotifyCallback from "./pages/SpotifyCallback";
 import AuthCallback from "./pages/AuthCallback";
 import CompleteProfile from "./pages/CompleteProfile";
+import Plans from "./pages/Plans";
+import { SubscriptionProvider } from "./context/subscription-context";
 
 const queryClient = new QueryClient();
 
@@ -19,19 +21,27 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
+      <SubscriptionProvider>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
+          <Routes>
+            <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/spotify/callback" element={<SpotifyCallback />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/complete-profile" element={<CompleteProfile />} />
+            <Route path="/complete-profile" element={<CompleteProfile />} />
+            <Route path="/plans" element={<Plans />} />
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </SubscriptionProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

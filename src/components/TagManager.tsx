@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface Tag {
   id: number;
@@ -26,6 +27,7 @@ export const TagManager: React.FC<TagManagerProps> = ({ taskId, taskTags = [] })
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: allTags = [] } = useQuery<Tag[]>({
     queryKey: ["tags"],
@@ -55,6 +57,9 @@ export const TagManager: React.FC<TagManagerProps> = ({ taskId, taskTags = [] })
           error.response?.data?.message || "Ocorreu um erro. Tente novamente.",
         variant: "destructive",
       });
+      if (error.response?.status === 403) {
+        navigate("/plans");
+      }
     },
   });
 
@@ -76,6 +81,9 @@ export const TagManager: React.FC<TagManagerProps> = ({ taskId, taskTags = [] })
           error.response?.data?.message || "Ocorreu um erro. Tente novamente.",
         variant: "destructive",
       });
+      if (error.response?.status === 403) {
+        navigate("/plans");
+      }
     },
   });
 

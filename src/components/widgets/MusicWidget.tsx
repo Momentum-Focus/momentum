@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Play, Pause, SkipForward, SkipBack, Volume2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { DraggableWidget } from "./DraggableWidget";
+import { Play, Pause, SkipForward, SkipBack, Search, Cloud, Waves, Flame, Music } from "lucide-react";
+import { WidgetContainer } from "./WidgetContainer";
 import { YouTubePlayer } from "./YouTubePlayer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { motion } from "framer-motion";
 
 interface MusicWidgetProps {
   onClose: () => void;
@@ -23,13 +22,10 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
   onDragEnd,
   widgetId,
 }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState([75]);
-  const [currentTrack] = useState("Sons da Natureza - Chuva");
+  const [activeTab, setActiveTab] = useState<"spotify" | "youtube">("spotify");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Verifica o status de conexão do Spotify e Google
   const { data: spotifyStatus } = useQuery<{ isConnected: boolean }>({
     queryKey: ["spotifyStatus"],
     queryFn: () => api.get("/media/spotify/status").then((res) => res.data),
@@ -42,7 +38,6 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
     retry: 1,
   });
 
-  // Busca o perfil do usuário para verificar status de conexão completo
   const { data: userProfile } = useQuery<any>({
     queryKey: ["userProfile"],
     queryFn: () => api.get("/user").then((res) => res.data),
@@ -50,7 +45,6 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
   });
 
   useEffect(() => {
-    // Escuta mensagens do popup de autenticação
     const handleMessage = (event: MessageEvent) => {
       const frontendUrl = window.location.origin;
       
@@ -78,10 +72,6 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [queryClient, toast]);
-
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
-  };
 
   const handleConnectSpotify = () => {
     const token = localStorage.getItem("authToken");
@@ -149,57 +139,103 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
     }, 500);
   };
 
-  // Determina qual player ou botões mostrar baseado no status de conexão
   const isSpotifyConnected = spotifyStatus?.isConnected || userProfile?.isSpotifyConnected;
   const isGoogleConnected = googleStatus?.isConnected || userProfile?.isGoogleConnected;
 
   return (
-    <DraggableWidget
+    <WidgetContainer
       title="Player de Música"
       onClose={onClose}
-      className="w-80"
+      className="w-96"
       defaultPosition={defaultPosition}
       onPositionChange={onPositionChange}
       onDragEnd={onDragEnd}
       widgetId={widgetId}
     >
       <div className="p-6 space-y-6">
-        {/* Renderiza o player apropriado ou botões de conexão */}
-        {isSpotifyConnected ? (
-          // Spotify Player (placeholder - pode ser expandido depois)
-          <div className="space-y-4">
-            <div className="text-center py-4 bg-gradient-subtle rounded-lg border border-widget-border">
-              <div className="w-16 h-16 bg-green-500/20 rounded-full mx-auto mb-3 flex items-center justify-center">
-                <span className="text-green-500 text-2xl font-bold">S</span>
+        {/* Tabs */}
+        <div className="flex gap-1 bg-black/20 rounded-xl p-1">
+          <button
+            onClick={() => setActiveTab("spotify")}
+            className={`flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+              activeTab === "spotify"
+                ? "bg-white/10 text-white/90"
+                : "text-white/50 hover:text-white/70"
+            }`}
+          >
+            Spotify
+          </button>
+          <button
+            onClick={() => setActiveTab("youtube")}
+            className={`flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+              activeTab === "youtube"
+                ? "bg-white/10 text-white/90"
+                : "text-white/50 hover:text-white/70"
+            }`}
+          >
+            YouTube
+          </button>
+        </div>
+
+        {/* Spotify Tab */}
+        {activeTab === "spotify" && (
+          <div className="space-y-6">
+            {isSpotifyConnected ? (
+              <div className="space-y-6">
+                <div className="text-center py-6 rounded-xl border border-white/10 bg-black/20">
+              <div className="w-16 h-16 bg-[#1DB954]/20 rounded-full mx-auto mb-3 flex items-center justify-center">
+                    <span className="text-[#1DB954] text-2xl font-bold">S</span>
               </div>
-              <h4 className="font-medium text-foreground">Spotify Conectado</h4>
-              <p className="text-sm text-muted-foreground">Player do Spotify em desenvolvimento</p>
+                  <h4 className="text-sm text-white/90 mb-1 font-medium">
+                Spotify Conectado
+              </h4>
+                  <p className="text-xs text-white/50 font-light">
+                    Player do Spotify em desenvolvimento
+                  </p>
+                </div>
             </div>
-            
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-4">
-              <Button variant="ghost" size="lg">
-                <SkipBack className="h-5 w-5" />
-              </Button>
-              <Button onClick={handlePlayPause} size="lg" className="bg-gradient-primary hover:bg-primary-hover">
-                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
-              </Button>
-              <Button variant="ghost" size="lg">
-                <SkipForward className="h-5 w-5" />
-              </Button>
+            ) : (
+              <div className="space-y-6">
+                <button
+                  onClick={handleConnectSpotify}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#1DB954] hover:opacity-90 transition-opacity text-white font-medium"
+                >
+                  <span className="text-xl font-bold">S</span>
+                  <span>Conectar com Spotify</span>
+                </button>
+
+                <div className="space-y-3 pt-4 border-t border-white/10">
+                  <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
+                    Sons de Foco
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button className="px-3 py-2 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 transition-all duration-200 flex items-center gap-2">
+                      <Cloud className="h-4 w-4" strokeWidth={1.5} />
+                      Chuva
+                    </button>
+                    <button className="px-3 py-2 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 transition-all duration-200 flex items-center gap-2">
+                      <Waves className="h-4 w-4" strokeWidth={1.5} />
+                      Oceano
+              </button>
+                    <button className="px-3 py-2 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 transition-all duration-200 flex items-center gap-2">
+                      <Flame className="h-4 w-4" strokeWidth={1.5} />
+                      Lareira
+              </button>
+                    <button className="px-3 py-2 rounded-lg text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 transition-all duration-200 flex items-center gap-2">
+                      <Music className="h-4 w-4" strokeWidth={1.5} />
+                      Lo-fi
+              </button>
             </div>
-            
-            {/* Volume Control */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Volume</span>
-                <span className="text-sm text-foreground">{volume[0]}%</span>
               </div>
-              <Slider value={volume} onValueChange={setVolume} max={100} step={1} className="w-full" />
-            </div>
+              </div>
+            )}
           </div>
-        ) : isGoogleConnected ? (
-          // YouTube Player
+        )}
+
+        {/* YouTube Tab */}
+        {activeTab === "youtube" && (
+          <div className="space-y-6">
+            {isGoogleConnected ? (
           <YouTubePlayer
             onDisconnect={() => {
               queryClient.invalidateQueries({ queryKey: ["googleStatus"] });
@@ -207,59 +243,17 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
             }}
           />
         ) : (
-          // Botões de conexão (nenhum conectado)
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Conectar Plataformas
-            </h3>
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-3 h-12"
-                onClick={handleConnectSpotify}
+                <button
+                  onClick={handleConnectGoogle}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#FF0000] hover:opacity-90 transition-opacity text-white font-medium"
               >
-                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">S</span>
-                </div>
-                Conectar com Spotify
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-3 h-12"
-                onClick={handleConnectGoogle}
-              >
-                <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">Y</span>
-                </div>
-                Conectar com YouTube Music
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Preset Sounds (apenas se nenhuma plataforma estiver conectada) */}
-        {!isSpotifyConnected && !isGoogleConnected && (
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Sons de Foco
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="sm" className="text-xs">
-                🌧️ Chuva
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs">
-                🌊 Oceano
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs">
-                🔥 Lareira
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs">
-                🎵 Lo-fi
-              </Button>
-            </div>
+                <span className="text-xl font-bold">Y</span>
+                <span>Conectar com YouTube Music</span>
+                </button>
+            )}
           </div>
         )}
       </div>
-    </DraggableWidget>
+    </WidgetContainer>
   );
 };
