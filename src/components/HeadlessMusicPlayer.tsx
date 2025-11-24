@@ -35,18 +35,6 @@ export const HeadlessMusicPlayer: React.FC = () => {
   const spotifyInitializedRef = useRef(false);
   const youtubeInitializedRef = useRef(false);
 
-  // Buscar token do Spotify
-  const { data: spotifyToken } = useQuery({
-    queryKey: ["spotifyToken"],
-    queryFn: async () => {
-      const { data } = await api.get("/media/spotify/token");
-      return data.accessToken;
-    },
-    retry: 2,
-    refetchInterval: 3600000,
-    staleTime: 3300000,
-  });
-
   // Buscar status do Spotify
   const { data: spotifyStatus } = useQuery<{
     isConnected: boolean;
@@ -58,14 +46,34 @@ export const HeadlessMusicPlayer: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
+  // Buscar token do Spotify - só se estiver conectado e premium
+  const { data: spotifyToken } = useQuery({
+    queryKey: ["spotifyToken"],
+    queryFn: async () => {
+      const { data } = await api.get("/media/spotify/token");
+      return data.accessToken;
+    },
+    enabled: spotifyStatus?.isConnected === true && spotifyStatus?.isPremium === true,
+    retry: 2,
+    refetchInterval: 3600000,
+    staleTime: 3300000,
+  });
+
   // Inicializar Spotify Web Playback SDK (apenas uma vez)
   useEffect(() => {
-    if (
-      !spotifyStatus?.isConnected ||
-      !spotifyStatus?.isPremium ||
-      spotifyInitializedRef.current ||
-      window.Spotify
-    ) {
+    // Se o SDK já está carregado, não precisa fazer nada
+    if (window.Spotify) {
+      return;
+    }
+
+    // Só carrega o SDK se o Spotify estiver conectado e premium
+    if (!spotifyStatus?.isConnected || !spotifyStatus?.isPremium) {
+      return;
+    }
+
+    // Verifica se o script já foi adicionado
+    const existingScript = document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]');
+    if (existingScript) {
       return;
     }
 
@@ -74,7 +82,11 @@ export const HeadlessMusicPlayer: React.FC = () => {
     script.async = true;
     document.body.appendChild(script);
 
+    const originalOnReady = window.onSpotifyWebPlaybackSDKReady;
     window.onSpotifyWebPlaybackSDKReady = () => {
+      if (originalOnReady) {
+        originalOnReady();
+      }
       console.log("[HeadlessPlayer] Spotify SDK carregado");
     };
   }, [spotifyStatus]);
@@ -85,11 +97,31 @@ export const HeadlessMusicPlayer: React.FC = () => {
       !spotifyToken ||
       !spotifyStatus?.isConnected ||
       !spotifyStatus?.isPremium ||
-      !window.Spotify ||
-      spotifyPlayerRef.current ||
-      spotifyInitializedRef.current
+      !window.Spotify
     ) {
+      // Se as condições não forem atendidas, reseta o estado
+      if (spotifyPlayerRef.current) {
+        spotifyPlayerRef.current = null;
+      }
+      spotifyInitializedRef.current = false;
+      _setSpotifyReady(false);
+      _setSpotifyDeviceId(null);
       return;
+    }
+
+    // Se já existe um player e está pronto, não reinicializa
+    if (spotifyPlayerRef.current && spotifyInitializedRef.current) {
+      return;
+    }
+
+    // Limpa player anterior se existir
+    if (spotifyPlayerRef.current) {
+      try {
+        spotifyPlayerRef.current.disconnect();
+      } catch (error) {
+        // Ignora erros ao desconectar
+      }
+      spotifyPlayerRef.current = null;
     }
 
     spotifyInitializedRef.current = true;
@@ -131,6 +163,8 @@ export const HeadlessMusicPlayer: React.FC = () => {
         );
         _setSpotifyReady(false);
         _setSpotifyDeviceId(null);
+        spotifyInitializedRef.current = false;
+        spotifyPlayerRef.current = null;
       }
     );
 
@@ -143,6 +177,8 @@ export const HeadlessMusicPlayer: React.FC = () => {
         );
         _setSpotifyReady(false);
         _setSpotifyDeviceId(null);
+        spotifyInitializedRef.current = false;
+        spotifyPlayerRef.current = null;
         // TODO: Disparar refresh de token
       }
     );
@@ -156,6 +192,8 @@ export const HeadlessMusicPlayer: React.FC = () => {
         );
         _setSpotifyReady(false);
         _setSpotifyDeviceId(null);
+        spotifyInitializedRef.current = false;
+        spotifyPlayerRef.current = null;
       }
     );
 
@@ -187,6 +225,9 @@ export const HeadlessMusicPlayer: React.FC = () => {
     newPlayer.connect().catch((error: any) => {
       console.error("[HeadlessPlayer] Erro ao conectar Spotify Player:", error);
       spotifyPlayerRef.current = null;
+      spotifyInitializedRef.current = false;
+      _setSpotifyReady(false);
+      _setSpotifyDeviceId(null);
     });
 
     return () => {
