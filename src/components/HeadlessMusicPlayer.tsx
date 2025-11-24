@@ -53,7 +53,8 @@ export const HeadlessMusicPlayer: React.FC = () => {
       const { data } = await api.get("/media/spotify/token");
       return data.accessToken;
     },
-    enabled: spotifyStatus?.isConnected === true && spotifyStatus?.isPremium === true,
+    enabled:
+      spotifyStatus?.isConnected === true && spotifyStatus?.isPremium === true,
     retry: 2,
     refetchInterval: 3600000,
     staleTime: 3300000,
@@ -72,7 +73,9 @@ export const HeadlessMusicPlayer: React.FC = () => {
     }
 
     // Verifica se o script já foi adicionado
-    const existingScript = document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]');
+    const existingScript = document.querySelector(
+      'script[src="https://sdk.scdn.co/spotify-player.js"]'
+    );
     if (existingScript) {
       return;
     }

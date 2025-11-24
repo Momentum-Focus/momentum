@@ -251,11 +251,11 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
     }
     try {
       // Verifica se o player tem os métodos necessários
-      const hasMethods = 
+      const hasMethods =
         typeof youtubePlayerRef.current.playVideo === "function" &&
         typeof youtubePlayerRef.current.pauseVideo === "function" &&
         typeof youtubePlayerRef.current.getPlayerState === "function";
-      
+
       if (!hasMethods) {
         return false;
       }
