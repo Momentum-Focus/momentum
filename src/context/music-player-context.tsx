@@ -47,7 +47,7 @@ interface MusicPlayerContextType extends MusicPlayerState {
   pause: () => void;
   resume: () => void;
   seek: (time: number) => void;
-  setVolume: (volume: number) => void;
+  setVolume: (volume: number, forceUpdate?: boolean) => void;
   next: () => void;
   previous: () => void;
   // Métodos para controlar estados de arrasto (previnem atualização durante drag)
