@@ -77,32 +77,34 @@ export const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        {/* Center Hero */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center space-y-4 px-6">
-            <div className="flex flex-col items-center gap-6">
-              <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center shadow-2xl shadow-black/40">
-                <img
-                  src={momentumLogo}
-                  alt="Momentum"
-                  className="w-12 h-12 object-contain opacity-90"
-                />
-              </div>
-              <div className="space-y-3">
-                <p className="text-xs tracking-[0.6em] uppercase text-white/40">
-                  Mindful Workspace
-                </p>
-                <h2 className="text-5xl md:text-6xl font-extralight tracking-[0.3em] text-white">
-                  Momentum
-                </h2>
-                <p className="text-sm md:text-base text-white/60 max-w-xl mx-auto font-light">
-                  Um espaço imersivo para foco, produtividade e bem-estar
-                  mental.
-                </p>
+        {/* Center Hero - Oculto quando há imagem de fundo */}
+        {!backgroundImage && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center space-y-4 px-6">
+              <div className="flex flex-col items-center gap-6">
+                <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center shadow-2xl shadow-black/40">
+                  <img
+                    src={momentumLogo}
+                    alt="Momentum"
+                    className="w-12 h-12 object-contain opacity-90"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs tracking-[0.6em] uppercase text-white/40">
+                    Mindful Workspace
+                  </p>
+                  <h2 className="text-5xl md:text-6xl font-extralight tracking-[0.3em] text-white">
+                    Momentum
+                  </h2>
+                  <p className="text-sm md:text-base text-white/60 max-w-xl mx-auto font-light">
+                    Um espaço imersivo para foco, produtividade e bem-estar
+                    mental.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Main Content */}
         <div className="h-full w-full">{children}</div>

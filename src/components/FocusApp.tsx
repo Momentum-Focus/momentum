@@ -85,7 +85,29 @@ const FocusApp: React.FC<FocusAppProps> = ({
     initialState.showBackground
   );
   const [showProfile, setShowProfile] = useState(initialState.showProfile);
-  const [currentBackground, setCurrentBackground] = useState<string>("");
+  // Load background from localStorage
+  const loadBackground = () => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("momentum-background");
+      return saved || "";
+    }
+    return "";
+  };
+
+  const [currentBackground, setCurrentBackground] = useState<string>(
+    loadBackground()
+  );
+
+  // Persist background to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (currentBackground) {
+        localStorage.setItem("momentum-background", currentBackground);
+      } else {
+        localStorage.removeItem("momentum-background");
+      }
+    }
+  }, [currentBackground]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeDockItem, setActiveDockItem] = useState<string | null>(null);
 

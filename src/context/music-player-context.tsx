@@ -9,6 +9,12 @@ import React, {
 } from "react";
 import { api } from "@/lib/api";
 
+declare global {
+  interface Window {
+    YT: any;
+  }
+}
+
 // Tipos
 type Service = "SPOTIFY" | "YOUTUBE" | null;
 
@@ -41,7 +47,7 @@ interface MusicPlayerContextType extends MusicPlayerState {
   pause: () => void;
   resume: () => void;
   seek: (time: number) => void;
-  setVolume: (volume: number) => void;
+  setVolume: (volume: number, forceUpdate?: boolean) => void;
   next: () => void;
   previous: () => void;
   // Métodos para controlar estados de arrasto (previnem atualização durante drag)
@@ -300,13 +306,68 @@ export const MusicPlayerProvider: React.FC<MusicPlayerProviderProps> = ({
       }
     } else if (activeService === "YOUTUBE" && youtubePlayerRef.current) {
       try {
-        youtubePlayerRef.current.playVideo?.();
-        setIsPlaying(true);
+        // Verifica o estado do player antes de dar play
+        // Se o vídeo já está carregado, apenas dá play sem recarregar
+        const playerState = youtubePlayerRef.current.getPlayerState?.();
+
+        // Estados do YouTube Player API:
+        // -1 (UNSTARTED): Vídeo não iniciado
+        // 0 (ENDED): Vídeo terminou
+        // 1 (PLAYING): Vídeo está tocando
+        // 2 (PAUSED): Vídeo está pausado
+        // 3 (BUFFERING): Vídeo está carregando
+        // 5 (CUED): Vídeo está pronto mas não iniciado
+
+        if (
+          playerState === window.YT?.PlayerState?.PAUSED ||
+          playerState === window.YT?.PlayerState?.CUED ||
+          playerState === 2 ||
+          playerState === 5
+        ) {
+          // Vídeo está pausado ou pronto, apenas dá play sem recarregar
+          youtubePlayerRef.current.playVideo?.();
+          setIsPlaying(true);
+        } else if (
+          playerState === window.YT?.PlayerState?.ENDED ||
+          playerState === 0
+        ) {
+          // Vídeo terminou, recarrega e toca do início
+          if (currentTrack) {
+            youtubePlayerRef.current.loadVideoById?.(currentTrack.id);
+            youtubePlayerRef.current.playVideo?.();
+            setIsPlaying(true);
+          }
+        } else if (
+          playerState === window.YT?.PlayerState?.UNSTARTED ||
+          playerState === -1
+        ) {
+          // Vídeo não iniciado, recarrega se tiver track atual
+          if (currentTrack) {
+            youtubePlayerRef.current.loadVideoById?.(currentTrack.id);
+            youtubePlayerRef.current.playVideo?.();
+            setIsPlaying(true);
+          }
+        } else {
+          // Para outros estados (PLAYING, BUFFERING), apenas tenta dar play
+          // Isso pode acontecer se o estado não foi sincronizado corretamente
+          youtubePlayerRef.current.playVideo?.();
+          setIsPlaying(true);
+        }
       } catch (error) {
         console.error("[MusicPlayer] Erro ao resumir YouTube:", error);
+        // Em caso de erro, tenta dar play mesmo assim
+        try {
+          youtubePlayerRef.current.playVideo?.();
+          setIsPlaying(true);
+        } catch (fallbackError) {
+          console.error(
+            "[MusicPlayer] Erro no fallback do resume:",
+            fallbackError
+          );
+        }
       }
     }
-  }, [activeService]);
+  }, [activeService, currentTrack]);
 
   // Seek (pular para um tempo específico)
   const seek = useCallback(

@@ -89,6 +89,50 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
   // Sincronização: Se já está tocando música ao abrir o widget, mostra o player
   const hasSyncedRef = useRef(false);
+  const playlistLoadedRef = useRef<string | null>(null); // Para evitar múltiplas execuções
+  const playerReadyCheckRef = useRef(false);
+
+  // Verifica periodicamente se o player está pronto
+  useEffect(() => {
+    if (activeService !== "YOUTUBE") {
+      playerReadyCheckRef.current = false;
+      return;
+    }
+
+    const checkPlayerReady = () => {
+      if (youtubePlayerRef.current) {
+        try {
+          // Verifica se o player tem os métodos necessários
+          const hasMethods =
+            typeof youtubePlayerRef.current.playVideo === "function" &&
+            typeof youtubePlayerRef.current.pauseVideo === "function";
+
+          if (hasMethods) {
+            playerReadyCheckRef.current = true;
+            return true;
+          }
+        } catch (error) {
+          // Ignora erros
+        }
+      }
+      return false;
+    };
+
+    // Verifica imediatamente
+    if (checkPlayerReady()) {
+      return;
+    }
+
+    // Se não estiver pronto, verifica periodicamente
+    const interval = setInterval(() => {
+      if (checkPlayerReady()) {
+        clearInterval(interval);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [activeService]);
+
   useEffect(() => {
     if (
       !hasSyncedRef.current &&
@@ -202,8 +246,21 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
   // Função auxiliar para verificar se o player está pronto
   const isPlayerReady = useCallback(() => {
-    if (!youtubePlayerRef.current) return false;
+    if (!youtubePlayerRef.current) {
+      return false;
+    }
     try {
+      // Verifica se o player tem os métodos necessários
+      const hasMethods =
+        typeof youtubePlayerRef.current.playVideo === "function" &&
+        typeof youtubePlayerRef.current.pauseVideo === "function" &&
+        typeof youtubePlayerRef.current.getPlayerState === "function";
+
+      if (!hasMethods) {
+        return false;
+      }
+
+      // Tenta obter o estado do player
       const playerState = youtubePlayerRef.current.getPlayerState?.();
       return playerState !== undefined && playerState !== null;
     } catch (error) {
@@ -213,12 +270,33 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
   // Handlers usando o contexto global
   const handlePlayPause = () => {
-    if (activeService !== "YOUTUBE") return;
-    if (isPlaying) {
-      pause();
-    } else {
-      resume();
-      onPlay?.();
+    if (activeService !== "YOUTUBE") {
+      return;
+    }
+
+    if (!youtubePlayerRef.current) {
+      toast({
+        title: "Player não pronto",
+        description: "Aguarde o player carregar...",
+        variant: "default",
+        duration: 2000,
+      });
+      return;
+    }
+
+    try {
+      if (isPlaying) {
+        pause();
+      } else {
+        resume();
+        onPlay?.();
+      }
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível controlar a reprodução.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -271,6 +349,11 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
         setCurrentQueueIndex(trackIndex);
         setView("PLAYER");
       }
+    } else {
+      // Se não há playlist selecionada, cria uma fila com apenas esta música
+      // Isso permite que os botões next/previous funcionem mesmo para músicas individuais
+      setCurrentQueue([video]);
+      setCurrentQueueIndex(0);
     }
 
     // Usa o contexto global para tocar
@@ -287,25 +370,21 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
   };
 
   useEffect(() => {
+    // Evita múltiplas execuções para a mesma playlist
+    const playlistId = selectedPlaylist?.id || "none";
     if (
       view === "PLAYER" &&
       playlistTracks &&
       playlistTracks.items &&
-      playlistTracks.items.length > 0
+      playlistTracks.items.length > 0 &&
+      playlistLoadedRef.current !== playlistId
     ) {
       const tracks = isShuffled
         ? [...playlistTracks.items].sort(() => Math.random() - 0.5)
         : playlistTracks.items;
 
-      console.log(
-        `[YTM] Carregando Playlist: ${selectedPlaylist?.id || "N/A"}, Itens: ${
-          tracks.length
-        }`
-      );
-
       // Prevenção de crash: verifica se há tracks antes de inicializar
       if (tracks.length === 0) {
-        console.error("[YTM] Playlist vazia detectada");
         toast({
           title: "Playlist vazia",
           description: "Esta playlist não contém músicas.",
@@ -322,7 +401,6 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
       );
 
       if (validTracks.length === 0) {
-        console.error("[YTM] Nenhum vídeo válido na playlist");
         toast({
           title: "Erro",
           description: "Nenhum vídeo válido encontrado na playlist.",
@@ -333,13 +411,11 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
       }
 
       if (validTracks.length < tracks.length) {
-        console.warn(
-          `[YTM] ${
-            tracks.length - validTracks.length
-          } vídeo(s) inválido(s) removido(s) da fila`
-        );
+        // Alguns vídeos inválidos foram removidos da fila
       }
 
+      // Marca como carregado antes de atualizar o estado
+      playlistLoadedRef.current = playlistId;
       setCurrentQueue(validTracks);
       setCurrentQueueIndex(0);
       const firstVideo = validTracks[0];
@@ -364,9 +440,37 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
     onPlay,
   ]);
 
+  // Reset do ref quando a playlist muda
+  useEffect(() => {
+    if (!selectedPlaylist) {
+      playlistLoadedRef.current = null;
+    }
+  }, [selectedPlaylist]);
+
   const handleNext = () => {
-    if (activeService !== "YOUTUBE" || !youtubePlayerRef.current) return;
-    if (currentQueue.length === 0) return;
+    if (activeService !== "YOUTUBE") {
+      return;
+    }
+
+    if (!youtubePlayerRef.current) {
+      toast({
+        title: "Player não pronto",
+        description: "Aguarde o player carregar...",
+        variant: "default",
+        duration: 2000,
+      });
+      return;
+    }
+
+    if (currentQueue.length === 0) {
+      toast({
+        title: "Fila vazia",
+        description: "Não há mais músicas na fila.",
+        variant: "default",
+        duration: 2000,
+      });
+      return;
+    }
 
     if (currentQueueIndex >= currentQueue.length - 1) {
       if (repeatMode === "all") {
@@ -418,8 +522,60 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
   };
 
   const handlePrevious = () => {
-    if (activeService !== "YOUTUBE" || !youtubePlayerRef.current) return;
-    if (currentQueue.length === 0 || currentQueueIndex <= 0) return;
+    if (activeService !== "YOUTUBE") {
+      return;
+    }
+
+    if (!youtubePlayerRef.current) {
+      toast({
+        title: "Player não pronto",
+        description: "Aguarde o player carregar...",
+        variant: "default",
+        duration: 2000,
+      });
+      return;
+    }
+
+    if (currentQueue.length === 0) {
+      toast({
+        title: "Fila vazia",
+        description: "Não há músicas na fila.",
+        variant: "default",
+        duration: 2000,
+      });
+      return;
+    }
+
+    // Se estiver nos primeiros 3 segundos, volta para o início da música atual
+    // Caso contrário, vai para a música anterior
+    if (position > 3) {
+      // Volta para o início da música atual
+      seek(0);
+      return;
+    }
+
+    if (currentQueueIndex <= 0) {
+      // Se estiver na primeira música e repeatMode é "all", vai para a última
+      if (repeatMode === "all" && currentQueue.length > 0) {
+        const lastVideo = currentQueue[currentQueue.length - 1];
+        if (
+          lastVideo?.id &&
+          typeof lastVideo.id === "string" &&
+          lastVideo.id.trim() !== ""
+        ) {
+          setCurrentQueueIndex(currentQueue.length - 1);
+          playTrack("YOUTUBE", {
+            id: lastVideo.id,
+            title: lastVideo.title,
+            artist: lastVideo.channelTitle || "Artista desconhecido",
+            cover: lastVideo.thumbnail || undefined,
+            duration: 0,
+            service: "YOUTUBE",
+          });
+        }
+      }
+      return;
+    }
 
     const prevIndex = currentQueueIndex - 1;
     if (prevIndex < 0 || prevIndex >= currentQueue.length) return;
@@ -466,8 +622,6 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
     const errorMessage =
       errorMessages[errorCode] || `Erro desconhecido (código: ${errorCode})`;
-
-    console.error(`[YTM] Erro de reprodução: ${errorCode} - ${errorMessage}`);
 
     // Erros que indicam que o vídeo não pode ser reproduzido: pula para o próximo
     if (errorCode === 101 || errorCode === 150 || errorCode === 100) {
@@ -1024,9 +1178,7 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
             <div className="flex items-center justify-center gap-3 mb-3 flex-shrink-0">
               <button
                 onClick={handleShuffle}
-                disabled={
-                  activeService !== "YOUTUBE" || !youtubePlayerRef.current
-                }
+                disabled={activeService !== "YOUTUBE"}
                 className={`p-2 transition-colors ${
                   isShuffled
                     ? "text-[#FF0000]"
@@ -1038,9 +1190,7 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
               <button
                 onClick={handlePrevious}
-                disabled={
-                  activeService !== "YOUTUBE" || !youtubePlayerRef.current
-                }
+                disabled={activeService !== "YOUTUBE"}
                 className="p-2 text-white/70 hover:text-white transition-colors disabled:opacity-50"
               >
                 <SkipBack className="h-5 w-5" strokeWidth={2} />
@@ -1048,9 +1198,7 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
               <button
                 onClick={handlePlayPause}
-                disabled={
-                  activeService !== "YOUTUBE" || !youtubePlayerRef.current
-                }
+                disabled={activeService !== "YOUTUBE"}
                 className="w-12 h-12 rounded-full bg-[#FF0000] hover:bg-[#FF3333] disabled:opacity-50 transition-all flex items-center justify-center text-white shadow-lg shadow-[#FF0000]/30"
               >
                 {isPlaying ? (
@@ -1070,9 +1218,7 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
               <button
                 onClick={handleNext}
-                disabled={
-                  activeService !== "YOUTUBE" || !youtubePlayerRef.current
-                }
+                disabled={activeService !== "YOUTUBE"}
                 className="p-2 text-white/70 hover:text-white transition-colors disabled:opacity-50"
               >
                 <SkipForward className="h-5 w-5" strokeWidth={2} />
@@ -1080,9 +1226,7 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
               <button
                 onClick={handleRepeat}
-                disabled={
-                  activeService !== "YOUTUBE" || !youtubePlayerRef.current
-                }
+                disabled={activeService !== "YOUTUBE"}
                 className={`p-2 transition-colors ${
                   repeatMode !== "off"
                     ? "text-[#FF0000]"
