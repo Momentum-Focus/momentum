@@ -1,14 +1,25 @@
 import React, { useState } from "react";
-import { Plus, Check, Trash2, Play, Eye } from "lucide-react";
+import { Plus, Check, Trash2, Play, Eye, AlertTriangle } from "lucide-react";
 import { WidgetContainer } from "./WidgetContainer";
 import { Task } from "../FocusApp";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { TaskDetailsModal } from "../TaskDetailsModal";
+import { AuthWall } from "../AuthWall";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface TasksWidgetProps {
   onClose: () => void;
@@ -17,6 +28,7 @@ interface TasksWidgetProps {
   onPositionChange?: (position: { x: number; y: number }) => void;
   onDragEnd?: (finalPosition: { x: number; y: number }) => void;
   widgetId?: string;
+  isGuestMode?: boolean;
 }
 
 type BackendTask = {
@@ -40,6 +52,7 @@ const backendTaskToFrontendTask = (backendTask: BackendTask): Task => {
     id: backendTask.id.toString(),
     name: backendTask.title,
     estimatedTime: backendTask.estimatedDurationMinutes || 25,
+    cycles: backendTask.estimatedSessions || undefined,
     isCompleted: backendTask.isCompleted,
     isActive: false,
   };
@@ -52,22 +65,25 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
   onPositionChange,
   onDragEnd,
   widgetId,
+  isGuestMode = false,
 }) => {
   const [taskName, setTaskName] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [newTagName, setNewTagName] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showTaskDetails, setShowTaskDetails] = useState(false);
+  const [showAuthWall, setShowAuthWall] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const {
-    data: backendTasks = [],
-    isLoading: isLoadingTasks,
-  } = useQuery<BackendTask[]>({
+  const { data: backendTasks = [], isLoading: isLoadingTasks } = useQuery<
+    BackendTask[]
+  >({
     queryKey: ["tasks"],
     queryFn: () => api.get("/tasks").then((res) => res.data),
+    enabled: !isGuestMode,
   });
 
   const tasks = backendTasks.map(backendTaskToFrontendTask);
@@ -75,6 +91,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
   const { data: tagOptions = [] } = useQuery<TagOption[]>({
     queryKey: ["tags"],
     queryFn: () => api.get("/tags").then((res) => res.data),
+    enabled: !isGuestMode,
   });
 
   const { mutate: createTask, isPending: isCreatingTask } = useMutation<
@@ -185,8 +202,51 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
     },
   });
 
+  const { mutate: deleteTag } = useMutation<{ message: string }, Error, number>(
+    {
+      mutationFn: (tagId) =>
+        api.delete(`/tags/${tagId}`).then((res) => res.data),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["tags"] });
+        toast({
+          title: "Tag excluída",
+          description: "A tag foi excluída com sucesso.",
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Erro ao excluir tag",
+          description:
+            error.response?.data?.message || "Não foi possível excluir a tag.",
+          variant: "destructive",
+        });
+      },
+    }
+  );
+
+  const handleDeleteSelectedTags = () => {
+    if (selectedTagIds.length === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteTags = () => {
+    // Delete all selected tags (will be removed from list via query invalidation)
+    selectedTagIds.forEach((tagId) => {
+      deleteTag(tagId);
+    });
+    // Clear selection immediately
+    setSelectedTagIds([]);
+    setShowDeleteConfirm(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
+
     if (!taskName.trim()) {
       toast({
         title: "Campo obrigatório",
@@ -205,6 +265,10 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
   };
 
   const handleDeleteTask = (taskId: string) => {
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
     const numericId = parseInt(taskId);
     if (!isNaN(numericId)) {
       deleteTask(numericId);
@@ -212,6 +276,10 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
   };
 
   const handleCompleteTask = (taskId: string) => {
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
     const numericId = parseInt(taskId);
     if (!isNaN(numericId)) {
       updateTask({ id: numericId, data: { isCompleted: true } });
@@ -228,11 +296,17 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
 
   const handleToggleTagSelection = (tagId: number) => {
     setSelectedTagIds((prev) =>
-    prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+      prev.includes(tagId)
+        ? prev.filter((id) => id !== tagId)
+        : [...prev, tagId]
     );
   };
 
   const handleCreateTagInline = () => {
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
     if (!newTagName.trim()) {
       return;
     }
@@ -253,7 +327,10 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
         <div className="p-6 space-y-4">
           {/* Add Task Input */}
           <div className="flex items-center gap-2">
-            <form onSubmit={handleSubmit} className="flex-1 flex items-center gap-2">
+            <form
+              onSubmit={handleSubmit}
+              className="flex-1 flex items-center gap-2"
+            >
               <input
                 type="text"
                 value={taskName}
@@ -279,9 +356,19 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
                 Tags
               </p>
               {selectedTagIds.length > 0 && (
-                <span className="text-xs text-white/60">
-                  {selectedTagIds.length} selecionada(s)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/60">
+                    {selectedTagIds.length} selecionada(s)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSelectedTags()}
+                    className="h-5 w-5 rounded-full bg-red-500/90 hover:bg-red-500 border border-red-400/50 flex items-center justify-center transition-colors"
+                    title="Excluir tags selecionadas"
+                  >
+                    <Trash2 className="h-3 w-3 text-white" />
+                  </button>
+                </div>
               )}
             </div>
             {tagOptions.length === 0 ? (
@@ -292,17 +379,24 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
               <div className="flex flex-wrap gap-2">
                 {tagOptions.map((tag) => {
                   const isActive = selectedTagIds.includes(tag.id);
+                  const tagColor = tag.color || "#3B82F6";
                   return (
                     <button
                       type="button"
                       key={tag.id}
                       onClick={() => handleToggleTagSelection(tag.id)}
                       className={cn(
-                        "px-3 py-1.5 rounded-full border text-xs transition-all",
+                        "px-3 py-1.5 rounded-full text-xs transition-all font-light",
                         isActive
-                          ? "bg-blue-500/20 border-blue-500 text-blue-200"
-                          : "border-white/10 text-white/70 hover:border-white/30"
+                          ? "text-white shadow-lg"
+                          : "text-white/70 hover:text-white/90"
                       )}
+                      style={{
+                        backgroundColor: isActive ? tagColor : `${tagColor}20`,
+                        border: `1px solid ${
+                          isActive ? tagColor : `${tagColor}40`
+                        }`,
+                      }}
                     >
                       {tag.name}
                     </button>
@@ -410,7 +504,8 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
           {!isLoadingTasks && tasks.length === 0 && (
             <div className="text-center py-12 text-white/50">
               <p className="text-sm font-light">
-                Nenhuma tarefa criada ainda. Adicione sua primeira tarefa para começar!
+                Nenhuma tarefa criada ainda. Adicione sua primeira tarefa para
+                começar!
               </p>
             </div>
           )}
@@ -428,6 +523,43 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
           }
         }}
       />
+      <AuthWall
+        open={showAuthWall}
+        onOpenChange={setShowAuthWall}
+        message="Criar e gerenciar tarefas requer autenticação. Faça login ou crie uma conta para continuar."
+      />
+
+      {/* Delete Tags Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="bg-[#0F1115]/95 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl p-0 max-w-md">
+          <AlertDialogHeader className="p-6 pb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <AlertDialogTitle className="text-xl font-light text-white/90">
+                Excluir {selectedTagIds.length === 1 ? "tag" : "tags"}?
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-sm text-white/60 font-light leading-relaxed pt-2">
+              {selectedTagIds.length === 1
+                ? "Tem certeza que deseja excluir esta tag? Esta ação não pode ser desfeita."
+                : `Tem certeza que deseja excluir ${selectedTagIds.length} tags selecionadas? Esta ação não pode ser desfeita.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="p-6 pt-4 flex-row justify-end gap-3">
+            <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-white/10 text-white/90 rounded-full px-6 font-light">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteTags}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full px-6 font-light"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
