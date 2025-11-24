@@ -1,5 +1,5 @@
 import React from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, LogIn } from "lucide-react";
 import momentumLogo from "@/assets/momentum-logo.png";
 import { Link } from "react-router-dom";
 
@@ -48,18 +48,31 @@ export const Layout: React.FC<LayoutProps> = ({
             >
               Planos
             </Link>
-            {userName && (
-              <span className="text-sm text-white/60 font-light">
-                Olá, {userName}
-              </span>
-            )}
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center group"
+            {userName ? (
+              <>
+                <span className="text-sm text-white/60 font-light">
+                  Olá, {userName}
+                </span>
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center group"
+                  >
+                    <LogOut
+                      className="h-4 w-4 text-white/60 group-hover:text-red-400 transition-colors"
+                      strokeWidth={1.5}
+                    />
+                  </button>
+                )}
+              </>
+            ) : (
+              <Link
+                to="/login"
+                className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white/90 transition-all text-sm font-light"
               >
-                <LogOut className="h-4 w-4 text-white/60 group-hover:text-red-400 transition-colors" strokeWidth={1.5} />
-              </button>
+                <LogIn className="h-4 w-4" strokeWidth={1.5} />
+                Entrar
+              </Link>
             )}
           </div>
         </header>
@@ -83,7 +96,8 @@ export const Layout: React.FC<LayoutProps> = ({
                   Momentum
                 </h2>
                 <p className="text-sm md:text-base text-white/60 max-w-xl mx-auto font-light">
-                  Um espaço imersivo para foco, produtividade e bem-estar mental.
+                  Um espaço imersivo para foco, produtividade e bem-estar
+                  mental.
                 </p>
               </div>
             </div>
@@ -96,4 +110,3 @@ export const Layout: React.FC<LayoutProps> = ({
     </div>
   );
 };
-

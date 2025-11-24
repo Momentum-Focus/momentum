@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
 import { api } from "@/lib/api";
 
 type SubscriptionFeature = {
@@ -55,11 +61,9 @@ export const SubscriptionProvider = ({
       const { data } = await api.get<SubscriptionResponse>("/plans/me");
       if (data?.plan) {
         setPlanName(data.plan.name);
-        setFeatures(
-          data.plan.features?.map((item) => item.feature.code) ?? []
-        );
+        setFeatures(data.plan.features?.map((item) => item.feature.code) ?? []);
       } else {
-        setPlanName("FREE");
+        setPlanName("VIBES");
         setFeatures([]);
       }
     } catch (error) {
@@ -84,4 +88,3 @@ export const SubscriptionProvider = ({
 };
 
 export const useSubscription = () => useContext(SubscriptionContext);
-

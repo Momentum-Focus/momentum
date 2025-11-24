@@ -2,10 +2,10 @@ import React, { useRef, useState } from "react";
 import { Upload, Check } from "lucide-react";
 import { WidgetContainer } from "./WidgetContainer";
 import { motion } from "framer-motion";
-import { useSubscription } from "@/context/subscription-context";
+import { useFeatureCheck } from "@/hooks/use-feature-check";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { AuthWall } from "@/components/AuthWall";
 
 interface BackgroundWidgetProps {
   onClose: () => void;
@@ -60,23 +60,22 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
   widgetId,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { features } = useSubscription();
+  const { requireFeature, hasFeature, showAuthWall, setShowAuthWall } =
+    useFeatureCheck();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false);
-  const canUploadVideos = features.includes("VIDEO_BACKGROUND");
+  const canUploadVideos = hasFeature("VIDEO_BACKGROUND");
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.type.startsWith("video/") && !canUploadVideos) {
-      toast({
-        title: "Recurso Pro",
-        description: "Faça upgrade para o Momentum Pro para usar fundos em vídeo.",
-      });
-      navigate("/plans");
-      return;
+    if (file.type.startsWith("video/")) {
+      if (!requireFeature("VIDEO_BACKGROUND", "Fundo em Vídeo", "Flow")) {
+        return;
+      }
     }
 
     const formData = new FormData();
@@ -105,9 +104,7 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
         description: message,
         variant: "destructive",
       });
-      if (error.response?.status === 403) {
-        navigate("/plans");
-      }
+      // O hook useFeatureCheck já redireciona para /plans se necessário
     } finally {
       setIsUploading(false);
     }
@@ -144,7 +141,10 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
               onChange={handleFileUpload}
               className="hidden"
             />
-            <Upload className="h-8 w-8 mx-auto mb-3 text-white/50 group-hover:text-white/70 transition-colors" strokeWidth={1.5} />
+            <Upload
+              className="h-8 w-8 mx-auto mb-3 text-white/50 group-hover:text-white/70 transition-colors"
+              strokeWidth={1.5}
+            />
             <p className="text-sm text-white/90 font-light mb-1">
               {isUploading ? "Enviando..." : "Arraste ou clique"}
             </p>
@@ -155,6 +155,12 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
             </p>
           </div>
         </div>
+
+        <AuthWall
+          open={showAuthWall}
+          onOpenChange={setShowAuthWall}
+          message="Faça login ou crie uma conta para usar fundos personalizados."
+        />
 
         {/* Preset Backgrounds */}
         <div className="space-y-3">
@@ -188,7 +194,10 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
                           animate={{ scale: 1 }}
                           className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center"
                         >
-                          <Check className="h-3 w-3 text-white" strokeWidth={2} />
+                          <Check
+                            className="h-3 w-3 text-white"
+                            strokeWidth={2}
+                          />
                         </motion.div>
                       )}
                     </div>
@@ -201,7 +210,10 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
                           animate={{ scale: 1 }}
                           className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center"
                         >
-                          <Check className="h-3 w-3 text-white" strokeWidth={2} />
+                          <Check
+                            className="h-3 w-3 text-white"
+                            strokeWidth={2}
+                          />
                         </motion.div>
                       )}
                     </div>
@@ -220,4 +232,3 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
     </WidgetContainer>
   );
 };
-

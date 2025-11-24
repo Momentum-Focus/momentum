@@ -11,6 +11,7 @@ interface DraggableWidgetProps {
   onPositionChange?: (position: { x: number; y: number }) => void;
   onDragEnd?: (finalPosition: { x: number; y: number }) => void;
   widgetId?: string;
+  headerActions?: React.ReactNode;
 }
 
 export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
@@ -22,6 +23,7 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
   onPositionChange,
   onDragEnd,
   widgetId,
+  headerActions,
 }) => {
   const [position, setPosition] = useState(defaultPosition);
   const [isDragging, setIsDragging] = useState(false);
@@ -215,10 +217,14 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
       onMouseDown={handleMouseDown}
     >
       <div className="flex items-center justify-between p-4 border-b border-white/10">
-        <h3 className="text-sm font-medium zen-text-ghost select-none" style={{ fontWeight: 500 }}>
+        <h3
+          className="text-sm font-medium zen-text-ghost select-none"
+          style={{ fontWeight: 500 }}
+        >
           {title}
         </h3>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          {headerActions}
           <button
             onClick={() => setIsMinimized(!isMinimized)}
             className="h-6 w-6 p-0 rounded hover:bg-white/10 transition-colors flex items-center justify-center"
@@ -233,7 +239,10 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
             onClick={onClose}
             className="h-6 w-6 p-0 rounded hover:bg-white/10 transition-colors flex items-center justify-center"
           >
-            <X className="h-3 w-3 zen-text-muted hover:zen-text-ghost transition-colors" strokeWidth={1.5} />
+            <X
+              className="h-3 w-3 zen-text-muted hover:zen-text-ghost transition-colors"
+              strokeWidth={1.5}
+            />
           </button>
         </div>
       </div>

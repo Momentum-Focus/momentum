@@ -2,6 +2,10 @@ import React, { useRef } from "react";
 import { Upload, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DraggableWidget } from "./widgets/DraggableWidget";
+import { useFeatureCheck } from "@/hooks/use-feature-check";
+import { AuthWall } from "./AuthWall";
+import { api } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface BackgroundSelectorProps {
   onClose: () => void;
@@ -56,16 +60,48 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
   widgetId,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { requireFeature, showAuthWall, setShowAuthWall } = useFeatureCheck();
+  const { toast } = useToast();
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        onBackgroundSelect(result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // Verificar se é vídeo e se o usuário tem a feature
+    if (file.type.startsWith("video/")) {
+      if (!requireFeature("VIDEO_BACKGROUND", "Fundo em Vídeo", "Flow")) {
+        return;
+      }
+    }
+
+    // Upload para o backend
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const { data } = await api.post("/media/background/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      onBackgroundSelect(data.url);
+      toast({
+        title: "Plano de fundo atualizado",
+        description: data.isVideo
+          ? "Vídeo aplicado com sucesso."
+          : "Imagem aplicada com sucesso.",
+      });
+    } catch (error: any) {
+      const message =
+        error.response?.data?.message ||
+        "Não foi possível carregar o fundo. Tente novamente.";
+      toast({
+        title: "Erro ao carregar",
+        description: message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -105,9 +141,17 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
             className="hidden"
           />
           <p className="text-xs text-muted-foreground">
-            Formatos suportados: JPG, PNG, MP4, WebM
+            {requireFeature("VIDEO_BACKGROUND", "Fundo em Vídeo", "Flow")
+              ? "Formatos suportados: JPG, PNG, MP4, WebM"
+              : "Plano Free: apenas JPG/PNG"}
           </p>
         </div>
+
+        <AuthWall
+          open={showAuthWall}
+          onOpenChange={setShowAuthWall}
+          message="Faça login ou crie uma conta para usar fundos personalizados."
+        />
 
         {/* Preset Backgrounds */}
         <div className="space-y-3">

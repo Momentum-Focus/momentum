@@ -108,52 +108,56 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <MessageSquare className="h-4 w-4" />
-        <h3 className="font-semibold">Comentários</h3>
-        <span className="text-sm text-muted-foreground">({comments.length})</span>
+        <MessageSquare className="h-4 w-4 text-white/60" />
+        <h3 className="font-light text-white/90">Comentários</h3>
+        <span className="text-sm text-white/40 font-light">
+          ({comments.length})
+        </span>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-2">
+      <form onSubmit={handleSubmit} className="space-y-3">
         <Textarea
           placeholder="Adicione um comentário..."
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           rows={3}
-          className="resize-none"
+          className="resize-none bg-white/5 border-white/10 rounded-xl text-white/90 placeholder:text-white/30 focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
         />
         <Button
           type="submit"
           size="sm"
           disabled={isCreating || !commentText.trim()}
-          className="w-full"
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-light"
         >
           <Send className="h-4 w-4 mr-2" />
           {isCreating ? "Enviando..." : "Enviar comentário"}
         </Button>
       </form>
 
-      <Separator />
+      <Separator className="bg-white/10" />
 
       <div className="space-y-3 max-h-64 overflow-y-auto">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando comentários...</p>
+          <p className="text-sm text-white/40 font-light">
+            Carregando comentários...
+          </p>
         ) : comments.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
+          <p className="text-sm text-white/40 font-light text-center py-4">
             Nenhum comentário ainda. Seja o primeiro a comentar!
           </p>
         ) : (
           comments.map((comment) => (
             <div
               key={comment.id}
-              className="p-3 rounded-lg border bg-muted/30 space-y-2"
+              className="p-4 rounded-xl border border-white/10 bg-white/5 space-y-2"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-light text-sm text-white/90">
                       {comment.user?.name || "Usuário"}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-white/40 font-light">
                       {new Date(comment.createdAt).toLocaleDateString("pt-BR", {
                         day: "2-digit",
                         month: "2-digit",
@@ -163,7 +167,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                       })}
                     </span>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+                  <p className="text-sm text-white/70 font-light whitespace-pre-wrap">
+                    {comment.content}
+                  </p>
                 </div>
                 {currentUser?.id === comment.userId && (
                   <Button
@@ -171,9 +177,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                     variant="ghost"
                     onClick={() => deleteComment(comment.id)}
                     disabled={isDeleting}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 text-white/40 hover:text-red-400 hover:bg-red-500/10"
                   >
-                    <Trash2 className="h-3 w-3 text-destructive" />
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 )}
               </div>
@@ -184,4 +190,3 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
     </div>
   );
 };
-

@@ -1,9 +1,8 @@
 import FocusApp from "@/components/FocusApp";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 type UserProfile = {
   id: number;
@@ -12,35 +11,50 @@ type UserProfile = {
 };
 
 const Index = () => {
-  const queryClient = useQueryClient();
   const token = localStorage.getItem("authToken");
+  const { toast } = useToast();
 
-  const { data: user, isLoading: isLoadingUser } = useQuery<UserProfile>({
+  const {
+    data: user,
+    isLoading: isLoadingUser,
+    error,
+  } = useQuery<UserProfile>({
     queryKey: ["userProfile"],
-    queryFn: () => api.get("/user").then((res) => res.data),
+    queryFn: async () => {
+      // Verifica se o token existe antes de fazer a requisição
+      const currentToken = localStorage.getItem("authToken");
+      if (!currentToken) {
+        throw new Error("Token não encontrado");
+      }
+      return api.get("/user").then((res) => res.data);
+    },
     retry: 1,
     enabled: !!token,
+    refetchOnMount: true, // Sempre refetch quando o componente monta
+    refetchOnWindowFocus: false, // Não refetch quando a janela ganha foco
   });
 
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    queryClient.clear();
-    window.location.reload();
-  };
+  // Log para debug (remover depois)
+  useEffect(() => {
+    if (error) {
+      console.log("Erro ao buscar perfil:", error);
+      console.log("Token no localStorage:", localStorage.getItem("authToken"));
+    }
+  }, [error]);
 
-  if (!token) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#0F1115]">
-        <Link to="/login">
-          <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-            Login
-          </Button>
-        </Link>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const logoutSuccess = sessionStorage.getItem("logoutSuccess");
+    if (logoutSuccess === "true") {
+      toast({
+        title: "Logout realizado",
+        description: "Você saiu da sua conta com sucesso.",
+      });
+      sessionStorage.removeItem("logoutSuccess");
+    }
+  }, [toast]);
 
-  return <FocusApp />;
+  // Modo Visitante: mostra FocusApp mesmo sem token
+  return <FocusApp isGuestMode={!token} user={user} />;
 };
 
 export default Index;
