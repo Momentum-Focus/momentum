@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Layout } from "./Layout";
 import { Dock } from "./Dock";
 import { TimerWidget } from "./widgets/TimerWidget";
@@ -22,27 +22,100 @@ export interface Task {
 
 export type PomodoroMode = "focus" | "short-break" | "long-break";
 
-const FocusApp = () => {
-  const [showPomodoro, setShowPomodoro] = useState(false);
-  const [showMusic, setShowMusic] = useState(false);
-  const [showTasks, setShowTasks] = useState(false);
-  const [showBackground, setShowBackground] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+interface FocusAppProps {
+  isGuestMode?: boolean;
+  user?: { id: number; name: string; email: string };
+}
+
+const FocusApp: React.FC<FocusAppProps> = ({
+  isGuestMode = false,
+  user: userProp,
+}) => {
+  // Persistência de widgets abertos no localStorage
+  const loadWidgetState = () => {
+    if (typeof window === "undefined") {
+      return {
+        showPomodoro: false,
+        showMusic: false,
+        showTasks: false,
+        showBackground: false,
+        showProfile: false,
+      };
+    }
+    const saved = localStorage.getItem("momentum-widgets-state");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return {
+          showPomodoro: false,
+          showMusic: false,
+          showTasks: false,
+          showBackground: false,
+          showProfile: false,
+        };
+      }
+    }
+    return {
+      showPomodoro: false,
+      showMusic: false,
+      showTasks: false,
+      showBackground: false,
+      showProfile: false,
+    };
+  };
+
+  const saveWidgetState = (state: {
+    showPomodoro: boolean;
+    showMusic: boolean;
+    showTasks: boolean;
+    showBackground: boolean;
+    showProfile: boolean;
+  }) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("momentum-widgets-state", JSON.stringify(state));
+    }
+  };
+
+  const initialState = loadWidgetState();
+  const [showPomodoro, setShowPomodoro] = useState(initialState.showPomodoro);
+  const [showMusic, setShowMusic] = useState(initialState.showMusic);
+  const [showTasks, setShowTasks] = useState(initialState.showTasks);
+  const [showBackground, setShowBackground] = useState(
+    initialState.showBackground
+  );
+  const [showProfile, setShowProfile] = useState(initialState.showProfile);
   const [currentBackground, setCurrentBackground] = useState<string>("");
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeDockItem, setActiveDockItem] = useState<string | null>(null);
 
+  // Salva estado dos widgets sempre que mudar
+  useEffect(() => {
+    saveWidgetState({
+      showPomodoro,
+      showMusic,
+      showTasks,
+      showBackground,
+      showProfile,
+    });
+  }, [showPomodoro, showMusic, showTasks, showBackground, showProfile]);
+
   const token =
     typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-  const { data: user } = useQuery({
+  const { data: userFromQuery } = useQuery({
     queryKey: ["userProfile"],
     queryFn: () => api.get("/user").then((res) => res.data),
     retry: 1,
-    enabled: !!token,
+    enabled: !!token && !isGuestMode,
+    refetchOnMount: true, // Sempre refetch quando o componente monta
+    refetchOnWindowFocus: false, // Não refetch quando a janela ganha foco
   });
+
+  const user = userProp || userFromQuery;
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");
+    sessionStorage.setItem("logoutSuccess", "true");
     window.location.reload();
   };
 
@@ -359,36 +432,69 @@ const FocusApp = () => {
     widgetId: "pomodoro" | "music" | "tasks" | "background" | "profile"
   ) => {
     if (widgetId === "profile") {
+      // Toggle para profile
+      if (showProfile) {
+        setShowProfile(false);
+        setActiveDockItem(null);
+        return;
+      }
       setShowProfile(true);
       setActiveDockItem("profile");
       return;
     }
 
     const widgetKey = widgetId as "pomodoro" | "music" | "tasks" | "background";
+
+    // Toggle: se já está aberto, fecha
+    if (widgetId === "pomodoro" && showPomodoro) {
+      setShowPomodoro(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "music" && showMusic) {
+      setShowMusic(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "tasks" && showTasks) {
+      setShowTasks(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "background" && showBackground) {
+      setShowBackground(false);
+      setActiveDockItem(null);
+      return;
+    }
+
+    // Se não está aberto, abre
     setActiveDockItem(widgetKey);
 
-    if (widgetId === "pomodoro" && !showPomodoro) {
+    if (widgetId === "pomodoro") {
       const initialPos = getWidgetPosition("pomodoro", true, true);
       setWidgetPositions((prev) => ({
         ...prev,
         pomodoro: initialPos,
       }));
       setShowPomodoro(true);
-    } else if (widgetId === "music" && !showMusic) {
+    }
+    if (widgetId === "music") {
       const initialPos = getWidgetPosition("music", true, true);
       setWidgetPositions((prev) => ({
         ...prev,
         music: initialPos,
       }));
       setShowMusic(true);
-    } else if (widgetId === "tasks" && !showTasks) {
+    }
+    if (widgetId === "tasks") {
       const initialPos = getWidgetPosition("tasks", true, true);
       setWidgetPositions((prev) => ({
         ...prev,
         tasks: initialPos,
       }));
       setShowTasks(true);
-    } else if (widgetId === "background" && !showBackground) {
+    }
+    if (widgetId === "background") {
       const initialPos = getWidgetPosition("background", true, true);
       setWidgetPositions((prev) => ({
         ...prev,
@@ -404,13 +510,15 @@ const FocusApp = () => {
       userName={user?.name}
       onLogout={handleLogout}
     >
-        {/* Widgets */}
-        {showPomodoro && (
+      {/* Widgets */}
+      {showPomodoro && (
         <TimerWidget
           onClose={() => {
             setShowPomodoro(false);
             clearWidgetPosition("pomodoro");
-            setActiveDockItem(null);
+            setActiveDockItem(
+              activeDockItem === "pomodoro" ? null : activeDockItem
+            );
           }}
           activeTask={activeTask}
           onTaskComplete={handleTaskComplete}
@@ -428,7 +536,9 @@ const FocusApp = () => {
           onClose={() => {
             setShowMusic(false);
             clearWidgetPosition("music");
-            setActiveDockItem(null);
+            setActiveDockItem(
+              activeDockItem === "music" ? null : activeDockItem
+            );
           }}
           defaultPosition={
             widgetPositions["music"] || getWidgetPosition("music")
@@ -444,7 +554,9 @@ const FocusApp = () => {
           onClose={() => {
             setShowTasks(false);
             clearWidgetPosition("tasks");
-            setActiveDockItem(null);
+            setActiveDockItem(
+              activeDockItem === "tasks" ? null : activeDockItem
+            );
           }}
           onTaskStart={handleTaskStart}
           defaultPosition={
@@ -453,6 +565,7 @@ const FocusApp = () => {
           onPositionChange={(pos) => updateWidgetPosition("tasks", pos)}
           onDragEnd={(pos) => handleDragEnd("tasks", pos)}
           widgetId="tasks"
+          isGuestMode={isGuestMode}
         />
       )}
 
@@ -461,7 +574,9 @@ const FocusApp = () => {
           onClose={() => {
             setShowBackground(false);
             clearWidgetPosition("background");
-            setActiveDockItem(null);
+            setActiveDockItem(
+              activeDockItem === "background" ? null : activeDockItem
+            );
           }}
           onBackgroundSelect={setCurrentBackground}
           currentBackground={currentBackground}
@@ -474,26 +589,47 @@ const FocusApp = () => {
         />
       )}
 
-        {/* Dock */}
-        <Dock
-          activeItem={activeDockItem || undefined}
-          onTimerClick={() => handleOpenWidget("pomodoro")}
-          onMusicClick={() => handleOpenWidget("music")}
-          onTasksClick={() => handleOpenWidget("tasks")}
-          onBackgroundClick={() => handleOpenWidget("background")}
-          onProfileClick={() => handleOpenWidget("profile")}
-        />
-
-      {/* Profile Modal */}
-      <ProfileModal
-        open={showProfile}
-        onOpenChange={(open) => {
-          setShowProfile(open);
-          if (!open) {
-            setActiveDockItem(null);
+      {/* Dock */}
+      <Dock
+        activeItem={
+          showPomodoro
+            ? "pomodoro"
+            : showMusic
+            ? "music"
+            : showTasks
+            ? "tasks"
+            : showBackground
+            ? "background"
+            : showProfile
+            ? "profile"
+            : undefined
+        }
+        onTimerClick={() => handleOpenWidget("pomodoro")}
+        onMusicClick={() => handleOpenWidget("music")}
+        onTasksClick={() => handleOpenWidget("tasks")}
+        onBackgroundClick={() => handleOpenWidget("background")}
+        onProfileClick={() => {
+          if (isGuestMode) {
+            // Em modo visitante, redirecionar para login
+            window.location.href = "/login";
+            return;
           }
+          handleOpenWidget("profile");
         }}
       />
+
+      {/* Profile Modal - apenas se não for visitante */}
+      {!isGuestMode && (
+        <ProfileModal
+          open={showProfile}
+          onOpenChange={(open) => {
+            setShowProfile(open);
+            if (!open) {
+              setActiveDockItem(null);
+            }
+          }}
+        />
+      )}
     </Layout>
   );
 };
