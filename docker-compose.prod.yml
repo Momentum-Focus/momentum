@@ -1,0 +1,40 @@
+services:
+  # Frontend React + Vite - Produção
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        # Passar variáveis de ambiente como argumentos de build
+        - VITE_API_URL=${VITE_API_URL}
+    container_name: momentum-frontend
+    restart: always
+    ports:
+      - "8080:80" # Porta externa 8080 mapeada para porta interna 80 do Nginx
+    networks:
+      - momentum-frontend-network
+    # Healthcheck para verificar se o Nginx está respondendo
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Limites de recursos (opcional, ajuste conforme necessário)
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+networks:
+  momentum-frontend-network:
+    driver: bridge

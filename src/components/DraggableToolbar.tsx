@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { Timer, Music, CheckSquare, Palette } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Timer, Music, CheckSquare, Palette, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DraggableToolbarProps {
@@ -8,6 +7,7 @@ interface DraggableToolbarProps {
   onOpenMusic: () => void;
   onOpenTasks: () => void;
   onOpenBackground: () => void;
+  onOpenProfile: () => void;
 }
 
 export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
@@ -15,6 +15,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   onOpenMusic,
   onOpenTasks,
   onOpenBackground,
+  onOpenProfile,
 }) => {
   const [position, setPosition] = useState(() => {
     const saved = localStorage.getItem("toolbar-position");
@@ -117,10 +118,9 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
     <div
       ref={toolbarRef}
       className={cn(
-        "fixed bg-widget-background/95 border border-widget-border rounded-2xl shadow-toolbar backdrop-blur-sm z-50",
+        "fixed zen-dock z-50",
         isDragging && "cursor-grabbing scale-105 transition-none select-none",
-        !isDragging &&
-          "cursor-grab hover:bg-widget-background transition-all duration-200"
+        !isDragging && "cursor-grab transition-all duration-200"
       )}
       style={{
         left: position.x,
@@ -128,46 +128,56 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
       }}
       onMouseDown={handleMouseDown}
     >
-      <div className="flex items-center gap-2 py-3 px-4 select-none">
-        <Button
-          variant="ghost"
-          size="sm"
+      <div className="flex items-center gap-1 py-2 px-3 select-none">
+        <button
           onClick={onOpenPomodoro}
-          className="flex flex-col items-center gap-1 h-auto py-2 px-3 hover:bg-primary/10 hover:text-primary transition-smooth group cursor-pointer"
+          className="flex flex-col items-center justify-center gap-1 h-14 w-14 rounded-xl hover:bg-white/10 transition-all duration-200 group relative"
         >
-          <Timer className="h-5 w-5 group-hover:scale-110 transition-transform" />
-          <span className="text-xs font-medium">Timer</span>
-        </Button>
+          <Timer className="h-5 w-5 zen-text-ghost group-hover:scale-110 transition-transform" strokeWidth={1.5} />
+          <span className="text-[10px] font-medium zen-text-muted group-hover:zen-text-ghost transition-colors">
+            Timer
+          </span>
+        </button>
 
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={onOpenMusic}
-          className="flex flex-col items-center gap-1 h-auto py-2 px-3 hover:bg-primary/10 hover:text-primary transition-smooth group cursor-pointer"
+          className="flex flex-col items-center justify-center gap-1 h-14 w-14 rounded-xl hover:bg-white/10 transition-all duration-200 group relative"
         >
-          <Music className="h-5 w-5 group-hover:scale-110 transition-transform" />
-          <span className="text-xs font-medium">Música</span>
-        </Button>
+          <Music className="h-5 w-5 zen-text-ghost group-hover:scale-110 transition-transform" strokeWidth={1.5} />
+          <span className="text-[10px] font-medium zen-text-muted group-hover:zen-text-ghost transition-colors">
+            Música
+          </span>
+        </button>
 
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={onOpenTasks}
-          className="flex flex-col items-center gap-1 h-auto py-2 px-3 hover:bg-primary/10 hover:text-primary transition-smooth group cursor-pointer"
+          className="flex flex-col items-center justify-center gap-1 h-14 w-14 rounded-xl hover:bg-white/10 transition-all duration-200 group relative"
         >
-          <CheckSquare className="h-5 w-5 group-hover:scale-110 transition-transform" />
-          <span className="text-xs font-medium">Tarefas</span>
-        </Button>
+          <CheckSquare className="h-5 w-5 zen-text-ghost group-hover:scale-110 transition-transform" strokeWidth={1.5} />
+          <span className="text-[10px] font-medium zen-text-muted group-hover:zen-text-ghost transition-colors">
+            Tarefas
+          </span>
+        </button>
 
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={onOpenBackground}
-          className="flex flex-col items-center gap-1 h-auto py-2 px-3 hover:bg-primary/10 hover:text-primary transition-smooth group cursor-pointer"
+          className="flex flex-col items-center justify-center gap-1 h-14 w-14 rounded-xl hover:bg-white/10 transition-all duration-200 group relative"
         >
-          <Palette className="h-5 w-5 group-hover:scale-110 transition-transform" />
-          <span className="text-xs font-medium">Fundo</span>
-        </Button>
+          <Palette className="h-5 w-5 zen-text-ghost group-hover:scale-110 transition-transform" strokeWidth={1.5} />
+          <span className="text-[10px] font-medium zen-text-muted group-hover:zen-text-ghost transition-colors">
+            Fundo
+          </span>
+        </button>
+
+        <button
+          onClick={onOpenProfile}
+          className="flex flex-col items-center justify-center gap-1 h-14 w-14 rounded-xl hover:bg-white/10 transition-all duration-200 group relative"
+        >
+          <User className="h-5 w-5 zen-text-ghost group-hover:scale-110 transition-transform" strokeWidth={1.5} />
+          <span className="text-[10px] font-medium zen-text-muted group-hover:zen-text-ghost transition-colors">
+            Perfil
+          </span>
+        </button>
       </div>
     </div>
   );

@@ -1,24 +1,34 @@
 import React, { useState } from "react";
-import { Plus, Play, Check, Trash2, CheckSquare, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { DraggableWidget } from "./DraggableWidget";
+import { Plus, Check, Trash2, Play, Eye, AlertTriangle } from "lucide-react";
+import { WidgetContainer } from "./WidgetContainer";
 import { Task } from "../FocusApp";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { TaskDetailsModal } from "../TaskDetailsModal";
+import { AuthWall } from "../AuthWall";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface TasksWidgetProps {
   onClose: () => void;
-  tasks?: Task[];
-  setTasks?: React.Dispatch<React.SetStateAction<Task[]>>;
   onTaskStart: (task: Task) => void;
   defaultPosition?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
   onDragEnd?: (finalPosition: { x: number; y: number }) => void;
   widgetId?: string;
+  isGuestMode?: boolean;
 }
 
 type BackendTask = {
@@ -31,66 +41,58 @@ type BackendTask = {
   estimatedSessions?: number;
 };
 
-// Função para converter Task do backend para Task do frontend
+type TagOption = {
+  id: number;
+  name: string;
+  color?: string;
+};
+
 const backendTaskToFrontendTask = (backendTask: BackendTask): Task => {
   return {
     id: backendTask.id.toString(),
     name: backendTask.title,
     estimatedTime: backendTask.estimatedDurationMinutes || 25,
+    cycles: backendTask.estimatedSessions || undefined,
     isCompleted: backendTask.isCompleted,
     isActive: false,
   };
 };
 
-// Função para converter Task do frontend para formato do backend
-const frontendTaskToBackendTask = (task: Task) => {
-  return {
-    title: task.name,
-    description: task.name,
-    priority: "MEDIUM" as const,
-    estimatedDurationMinutes: task.estimatedTime,
-    estimatedSessions: task.cycles,
-  };
-};
-
 export const TasksWidget: React.FC<TasksWidgetProps> = ({
   onClose,
-  tasks: externalTasks,
-  setTasks: externalSetTasks,
   onTaskStart,
   defaultPosition,
   onPositionChange,
   onDragEnd,
   widgetId,
+  isGuestMode = false,
 }) => {
-  const [showForm, setShowForm] = useState(false);
   const [taskName, setTaskName] = useState("");
-  const [estimatedTime, setEstimatedTime] = useState("");
-  const [cycles, setCycles] = useState("");
-  const [breakDuration, setBreakDuration] = useState("");
-  const [breakCount, setBreakCount] = useState("");
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [newTagName, setNewTagName] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [showTaskDetails, setShowTaskDetails] = useState(false);
+  const [showAuthWall, setShowAuthWall] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  // Sempre busca do backend (ignora tasks externas se houver)
-  const {
-    data: backendTasks = [],
-    isLoading: isLoadingTasks,
-    isError: isErrorTasks,
-  } = useQuery<BackendTask[]>({
+  const { data: backendTasks = [], isLoading: isLoadingTasks } = useQuery<
+    BackendTask[]
+  >({
     queryKey: ["tasks"],
     queryFn: () => api.get("/tasks").then((res) => res.data),
-    enabled: true, // Sempre busca do backend
+    enabled: !isGuestMode,
   });
 
-  // Converter tasks do backend para o formato do frontend
   const tasks = backendTasks.map(backendTaskToFrontendTask);
 
-  const showAdvancedFields = parseInt(estimatedTime) > 30;
-
-  const invalidateTasksQuery = () => {
-    queryClient.invalidateQueries({ queryKey: ["tasks"] });
-  };
+  const { data: tagOptions = [] } = useQuery<TagOption[]>({
+    queryKey: ["tags"],
+    queryFn: () => api.get("/tags").then((res) => res.data),
+    enabled: !isGuestMode,
+  });
 
   const { mutate: createTask, isPending: isCreatingTask } = useMutation<
     BackendTask,
@@ -99,32 +101,28 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
   >({
     mutationFn: (newTask) =>
       api.post("/tasks", newTask).then((res) => res.data),
-    onSuccess: () => {
+    onSuccess: async (createdTask) => {
+      if (selectedTagIds.length > 0 && createdTask?.id) {
+        await Promise.all(
+          selectedTagIds.map((tagId) =>
+            api.post(`/tags/${tagId}/tasks/${createdTask.id}`)
+          )
+        ).catch(() => {
+          toast({
+            title: "Erro ao vincular tags",
+            description: "Algumas tags não foram adicionadas.",
+            variant: "destructive",
+          });
+        });
+      }
+
       toast({
         title: "Tarefa criada!",
         description: "Sua nova tarefa foi adicionada à lista.",
       });
-      invalidateTasksQuery();
-      if (externalSetTasks) {
-        const newTask: Task = {
-          id: Date.now().toString(),
-          name: taskName.trim(),
-          estimatedTime: parseInt(estimatedTime),
-          ...(showAdvancedFields && {
-            cycles: cycles ? parseInt(cycles) : undefined,
-            breakDuration: breakDuration ? parseInt(breakDuration) : undefined,
-            breakCount: breakCount ? parseInt(breakCount) : undefined,
-          }),
-        };
-        externalSetTasks((prev) => [...prev, newTask]);
-      }
-      // Reset form
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       setTaskName("");
-      setEstimatedTime("");
-      setCycles("");
-      setBreakDuration("");
-      setBreakCount("");
-      setShowForm(false);
+      setSelectedTagIds([]);
     },
     onError: (error: any) => {
       toast({
@@ -133,6 +131,35 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
           error.response?.data?.message || "Não foi possível criar a tarefa.",
         variant: "destructive",
       });
+      if (error.response?.status === 403) {
+        navigate("/plans");
+      }
+    },
+  });
+
+  const { mutate: createTagQuick, isPending: isCreatingTag } = useMutation({
+    mutationFn: (name: string) =>
+      api.post("/tags", { name }).then((res) => res.data),
+    onSuccess: (tag: TagOption) => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setSelectedTagIds((prev) => [...prev, tag.id]);
+      setNewTagName("");
+      toast({
+        title: "Tag criada",
+        description: "Tag disponível para uso imediato.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao criar tag",
+        description:
+          error.response?.data?.message ||
+          "Não foi possível criar a tag agora.",
+        variant: "destructive",
+      });
+      if (error.response?.status === 403) {
+        navigate("/plans");
+      }
     },
   });
 
@@ -140,10 +167,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       api.patch(`/tasks/${id}`, data).then((res) => res.data),
     onSuccess: () => {
-      invalidateTasksQuery();
-      if (externalSetTasks) {
-        // Se está usando estado externo, não precisa fazer nada pois o backend já atualizou
-      }
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
     onError: (error: any) => {
       toast({
@@ -166,10 +190,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
       toast({
         title: "Tarefa deletada",
       });
-      invalidateTasksQuery();
-      if (externalSetTasks) {
-        // Se está usando estado externo, não precisa fazer nada pois o backend já deletou
-      }
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
     onError: (error: any) => {
       toast({
@@ -181,303 +202,364 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({
     },
   });
 
+  const { mutate: deleteTag } = useMutation<{ message: string }, Error, number>(
+    {
+      mutationFn: (tagId) =>
+        api.delete(`/tags/${tagId}`).then((res) => res.data),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["tags"] });
+        toast({
+          title: "Tag excluída",
+          description: "A tag foi excluída com sucesso.",
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Erro ao excluir tag",
+          description:
+            error.response?.data?.message || "Não foi possível excluir a tag.",
+          variant: "destructive",
+        });
+      },
+    }
+  );
+
+  const handleDeleteSelectedTags = () => {
+    if (selectedTagIds.length === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteTags = () => {
+    // Delete all selected tags (will be removed from list via query invalidation)
+    selectedTagIds.forEach((tagId) => {
+      deleteTag(tagId);
+    });
+    // Clear selection immediately
+    setSelectedTagIds([]);
+    setShowDeleteConfirm(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!taskName.trim() || !estimatedTime) {
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
+
+    if (!taskName.trim()) {
       toast({
-        title: "Campos obrigatórios",
-        description: "Por favor, preencha o nome da tarefa e tempo estimado.",
+        title: "Campo obrigatório",
+        description: "Por favor, preencha o nome da tarefa.",
         variant: "destructive",
       });
       return;
     }
 
-    // Validação para campos avançados obrigatórios quando tempo > 30 min
-    if (showAdvancedFields && (!cycles || !breakDuration || !breakCount)) {
-      toast({
-        title: "Campos obrigatórios",
-        description:
-          "Para tarefas acima de 30 minutos, todos os campos de configuração do Pomodoro são obrigatórios.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newTaskData = {
+    createTask({
       title: taskName.trim(),
       description: taskName.trim(),
       priority: "MEDIUM" as const,
-      estimatedDurationMinutes: parseInt(estimatedTime),
-      ...(showAdvancedFields && {
-        estimatedSessions: cycles ? parseInt(cycles) : undefined,
-      }),
-    };
-
-    createTask(newTaskData);
+      estimatedDurationMinutes: 25,
+    });
   };
 
   const handleDeleteTask = (taskId: string) => {
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
     const numericId = parseInt(taskId);
     if (!isNaN(numericId)) {
       deleteTask(numericId);
-    } else if (externalSetTasks) {
-      // Se o ID não é numérico, está usando estado local
-      externalSetTasks((prev) => prev.filter((task) => task.id !== taskId));
     }
   };
 
   const handleCompleteTask = (taskId: string) => {
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
     const numericId = parseInt(taskId);
     if (!isNaN(numericId)) {
       updateTask({ id: numericId, data: { isCompleted: true } });
-    } else if (externalSetTasks) {
-      // Se o ID não é numérico, está usando estado local
-      externalSetTasks((prev) =>
-        prev.map((task) =>
-          task.id === taskId
-            ? { ...task, isCompleted: true, isActive: false }
-            : task
-        )
-      );
     }
   };
 
-  return (
-    <DraggableWidget
-      title="Gestão de Tarefas"
-      onClose={onClose}
-      className="w-96 max-h-[80vh] overflow-hidden"
-      defaultPosition={defaultPosition}
-      onPositionChange={onPositionChange}
-      onDragEnd={onDragEnd}
-      widgetId={widgetId}
-    >
-      <div className="p-6 space-y-4">
-        {/* Add Task Button */}
-        {!showForm && (
-          <Button
-            onClick={() => setShowForm(true)}
-            className="w-full bg-gradient-primary hover:bg-primary-hover"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar Tarefa
-          </Button>
-        )}
+  const handleViewTaskDetails = (taskId: string) => {
+    const numericId = parseInt(taskId);
+    if (!isNaN(numericId)) {
+      setSelectedTaskId(numericId);
+      setShowTaskDetails(true);
+    }
+  };
 
-        {/* Add Task Form */}
-        {showForm && (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4 p-4 bg-gradient-subtle rounded-lg border border-widget-border"
-          >
-            <div>
-              <Label htmlFor="taskName">Nome da Tarefa</Label>
-              <Input
-                id="taskName"
+  const handleToggleTagSelection = (tagId: number) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId)
+        ? prev.filter((id) => id !== tagId)
+        : [...prev, tagId]
+    );
+  };
+
+  const handleCreateTagInline = () => {
+    if (isGuestMode) {
+      setShowAuthWall(true);
+      return;
+    }
+    if (!newTagName.trim()) {
+      return;
+    }
+    createTagQuick(newTagName.trim());
+  };
+
+  return (
+    <>
+      <WidgetContainer
+        title="Gestão de Tarefas"
+        onClose={onClose}
+        className="w-96 max-h-[80vh] overflow-hidden"
+        defaultPosition={defaultPosition}
+        onPositionChange={onPositionChange}
+        onDragEnd={onDragEnd}
+        widgetId={widgetId}
+      >
+        <div className="p-6 space-y-4">
+          {/* Add Task Input */}
+          <div className="flex items-center gap-2">
+            <form
+              onSubmit={handleSubmit}
+              className="flex-1 flex items-center gap-2"
+            >
+              <input
+                type="text"
                 value={taskName}
                 onChange={(e) => setTaskName(e.target.value)}
-                placeholder="Ex: Estudar React"
-                required
+                placeholder="O que você vai focar hoje?"
+                className="flex-1 bg-transparent border-b border-white/20 focus:border-blue-500 outline-none px-2 py-2 text-white/90 placeholder:text-white/30 transition-colors font-light"
               />
-            </div>
+              <motion.button
+                type="submit"
+                disabled={isCreatingTask || !taskName.trim()}
+                className="h-8 w-8 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Plus className="h-4 w-4" strokeWidth={1.5} />
+              </motion.button>
+            </form>
+          </div>
 
-            <div>
-              <Label htmlFor="estimatedTime">
-                Estimativa de Tempo (minutos)
-              </Label>
-              <Input
-                id="estimatedTime"
-                type="number"
-                value={estimatedTime}
-                onChange={(e) => setEstimatedTime(e.target.value)}
-                placeholder="Ex: 45"
-                min="1"
-                required
-              />
-            </div>
-
-            {/* Advanced Fields - Conditional */}
-            {showAdvancedFields && (
-              <div className="space-y-4 p-3 bg-muted/50 rounded-lg border-l-4 border-primary">
-                <p className="text-sm text-muted-foreground">
-                  ⚡ Tarefa longa detectada! Configure os ciclos Pomodoro:
-                </p>
-
-                <div>
-                  <Label htmlFor="cycles">Quantos Ciclos Pomodoro? *</Label>
-                  <Input
-                    id="cycles"
-                    type="number"
-                    value={cycles}
-                    onChange={(e) => setCycles(e.target.value)}
-                    placeholder="Ex: 3"
-                    min="1"
-                    required
-                  />
+          <div className="space-y-3 border border-white/10 rounded-2xl p-4 bg-black/10">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-[0.4em] text-white/40">
+                Tags
+              </p>
+              {selectedTagIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/60">
+                    {selectedTagIds.length} selecionada(s)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSelectedTags()}
+                    className="h-5 w-5 rounded-full bg-red-500/90 hover:bg-red-500 border border-red-400/50 flex items-center justify-center transition-colors"
+                    title="Excluir tags selecionadas"
+                  >
+                    <Trash2 className="h-3 w-3 text-white" />
+                  </button>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="breakDuration">
-                      Duração da Pausa (min) *
-                    </Label>
-                    <Input
-                      id="breakDuration"
-                      type="number"
-                      value={breakDuration}
-                      onChange={(e) => setBreakDuration(e.target.value)}
-                      placeholder="5"
-                      min="1"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="breakCount">Número de Pausas *</Label>
-                    <Input
-                      id="breakCount"
-                      type="number"
-                      value={breakCount}
-                      onChange={(e) => setBreakCount(e.target.value)}
-                      placeholder="2"
-                      min="1"
-                      required
-                    />
-                  </div>
-                </div>
+              )}
+            </div>
+            {tagOptions.length === 0 ? (
+              <p className="text-sm text-white/40">
+                Nenhuma tag criada ainda. Adicione uma abaixo.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {tagOptions.map((tag) => {
+                  const isActive = selectedTagIds.includes(tag.id);
+                  const tagColor = tag.color || "#3B82F6";
+                  return (
+                    <button
+                      type="button"
+                      key={tag.id}
+                      onClick={() => handleToggleTagSelection(tag.id)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs transition-all font-light",
+                        isActive
+                          ? "text-white shadow-lg"
+                          : "text-white/70 hover:text-white/90"
+                      )}
+                      style={{
+                        backgroundColor: isActive ? tagColor : `${tagColor}20`,
+                        border: `1px solid ${
+                          isActive ? tagColor : `${tagColor}40`
+                        }`,
+                      }}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
               </div>
             )}
-
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                className="flex-1"
-                disabled={isCreatingTask}
-              >
-                {isCreatingTask ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Criando...
-                  </>
-                ) : (
-                  "Criar Tarefa"
-                )}
-              </Button>
-              <Button
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Criar nova tag"
+                value={newTagName}
+                onChange={(event) => setNewTagName(event.target.value)}
+                className="flex-1 bg-transparent border-b border-white/20 focus:border-blue-500 outline-none px-2 py-2 text-white/90 placeholder:text-white/30 transition-colors text-sm"
+              />
+              <button
                 type="button"
-                variant="outline"
-                onClick={() => setShowForm(false)}
+                onClick={handleCreateTagInline}
+                disabled={!newTagName.trim() || isCreatingTag}
+                className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs text-white/80 disabled:opacity-40"
               >
-                Cancelar
-              </Button>
+                {isCreatingTag ? "Criando..." : "Adicionar"}
+              </button>
             </div>
-          </form>
-        )}
-
-        {/* Loading State */}
-        {isLoadingTasks && (
-          <div className="flex justify-center items-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        )}
 
-        {/* Error State */}
-        {isErrorTasks && (
-          <div className="text-center py-8 text-destructive">
-            <p>Erro ao carregar tarefas.</p>
-          </div>
-        )}
+          {/* Loading State */}
+          {isLoadingTasks && (
+            <div className="flex justify-center items-center py-8">
+              <div className="h-8 w-8 border-2 border-white/20 border-t-blue-500 rounded-full animate-spin" />
+            </div>
+          )}
 
-        {/* Task List */}
-        {!isLoadingTasks && !isErrorTasks && tasks.length > 0 && (
-          <>
-            <Separator />
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              <h3 className="text-sm font-medium text-muted-foreground">
-                Suas Tarefas
-              </h3>
+          {/* Task List */}
+          {!isLoadingTasks && tasks.length > 0 && (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
               {tasks.map((task) => (
-                <div
+                <motion.div
                   key={task.id}
-                  className={`p-3 rounded-lg border transition-all ${
-                    task.isCompleted
-                      ? "bg-success/10 border-success/20"
-                      : task.isActive
-                      ? "bg-primary/10 border-primary/30 ring-2 ring-primary/20"
-                      : "bg-widget-background border-widget-border hover:border-primary/30"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-black/20 hover:bg-black/30 transition-all ${
+                    task.isCompleted ? "opacity-50" : ""
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4
-                        className={`font-medium ${
-                          task.isCompleted
-                            ? "line-through text-muted-foreground"
-                            : "text-foreground"
-                        }`}
-                      >
-                        {task.name}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {task.estimatedTime} min
-                        {task.cycles && ` • ${task.cycles} ciclos`}
-                      </p>
-                      {task.isActive && (
-                        <p className="text-xs text-primary font-medium">
-                          🎯 Ativa
-                        </p>
-                      )}
-                    </div>
+                  {/* Custom Checkbox */}
+                  <button
+                    onClick={() => handleCompleteTask(task.id)}
+                    className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                      task.isCompleted
+                        ? "bg-blue-500 border-blue-500"
+                        : "border-white/30 hover:border-white/50"
+                    }`}
+                  >
+                    {task.isCompleted && (
+                      <Check className="h-3 w-3 text-white" strokeWidth={2} />
+                    )}
+                  </button>
 
-                    <div className="flex gap-1">
-                      {!task.isCompleted && !task.isActive && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onTaskStart(task)}
-                          className="hover:bg-primary/10"
-                        >
-                          <Play className="h-3 w-3" />
-                        </Button>
-                      )}
-
-                      {!task.isCompleted && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCompleteTask(task.id)}
-                          className="hover:bg-success/10"
-                        >
-                          <Check className="h-3 w-3" />
-                        </Button>
-                      )}
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                  {/* Task Info */}
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-sm font-medium ${
+                        task.isCompleted
+                          ? "line-through text-white/50"
+                          : "text-white/90"
+                      }`}
+                    >
+                      {task.name}
+                    </p>
+                    <p className="text-xs text-white/50 font-light">
+                      {task.estimatedTime} min
+                    </p>
                   </div>
-                </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleViewTaskDetails(task.id)}
+                      className="h-7 w-7 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-white/60 hover:text-white/90"
+                    >
+                      <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </button>
+                    {!task.isCompleted && (
+                      <button
+                        onClick={() => onTaskStart(task)}
+                        className="h-7 w-7 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-white/60 hover:text-white/90"
+                      >
+                        <Play className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      className="h-7 w-7 rounded-lg hover:bg-red-500/20 transition-colors flex items-center justify-center text-white/60 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </button>
+                  </div>
+                </motion.div>
               ))}
             </div>
-          </>
-        )}
+          )}
 
-        {!isLoadingTasks && tasks.length === 0 && !showForm && (
-          <div className="text-center py-8 text-muted-foreground">
-            <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>Nenhuma tarefa criada ainda.</p>
-            <p className="text-sm">
-              Adicione sua primeira tarefa para começar!
-            </p>
-          </div>
-        )}
-      </div>
-    </DraggableWidget>
+          {/* Empty State */}
+          {!isLoadingTasks && tasks.length === 0 && (
+            <div className="text-center py-12 text-white/50">
+              <p className="text-sm font-light">
+                Nenhuma tarefa criada ainda. Adicione sua primeira tarefa para
+                começar!
+              </p>
+            </div>
+          )}
+        </div>
+      </WidgetContainer>
+
+      <TaskDetailsModal
+        taskId={selectedTaskId}
+        open={showTaskDetails}
+        onOpenChange={(open) => {
+          setShowTaskDetails(open);
+          if (!open) {
+            setSelectedTaskId(null);
+            queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          }
+        }}
+      />
+      <AuthWall
+        open={showAuthWall}
+        onOpenChange={setShowAuthWall}
+        message="Criar e gerenciar tarefas requer autenticação. Faça login ou crie uma conta para continuar."
+      />
+
+      {/* Delete Tags Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="bg-[#0F1115]/95 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl p-0 max-w-md">
+          <AlertDialogHeader className="p-6 pb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <AlertDialogTitle className="text-xl font-light text-white/90">
+                Excluir {selectedTagIds.length === 1 ? "tag" : "tags"}?
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-sm text-white/60 font-light leading-relaxed pt-2">
+              {selectedTagIds.length === 1
+                ? "Tem certeza que deseja excluir esta tag? Esta ação não pode ser desfeita."
+                : `Tem certeza que deseja excluir ${selectedTagIds.length} tags selecionadas? Esta ação não pode ser desfeita.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="p-6 pt-4 flex-row justify-end gap-3">
+            <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-white/10 text-white/90 rounded-full px-6 font-light">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteTags}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full px-6 font-light"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };

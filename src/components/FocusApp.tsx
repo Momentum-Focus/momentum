@@ -1,10 +1,13 @@
-import React, { useState } from "react";
-import { DraggableToolbar } from "./DraggableToolbar";
-import { PomodoroWidget } from "./widgets/PomodoroWidget";
+import React, { useState, useEffect } from "react";
+import { Layout } from "./Layout";
+import { Dock } from "./Dock";
+import { TimerWidget } from "./widgets/TimerWidget";
 import { MusicWidget } from "./widgets/MusicWidget";
 import { TasksWidget } from "./widgets/TasksWidget";
-import { BackgroundSelector } from "./BackgroundSelector";
-import momentumLogo from "@/assets/momentum-logo.png";
+import { BackgroundWidget } from "./widgets/BackgroundWidget";
+import { ProfileModal } from "./ProfileModal";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 export interface Task {
   id: string;
@@ -19,26 +22,111 @@ export interface Task {
 
 export type PomodoroMode = "focus" | "short-break" | "long-break";
 
-const FocusApp = () => {
-  const [showPomodoro, setShowPomodoro] = useState(false);
-  const [showMusic, setShowMusic] = useState(false);
-  const [showTasks, setShowTasks] = useState(false);
-  const [showBackground, setShowBackground] = useState(false);
+interface FocusAppProps {
+  isGuestMode?: boolean;
+  user?: { id: number; name: string; email: string };
+}
+
+const FocusApp: React.FC<FocusAppProps> = ({
+  isGuestMode = false,
+  user: userProp,
+}) => {
+  // Persistência de widgets abertos no localStorage
+  const loadWidgetState = () => {
+    if (typeof window === "undefined") {
+      return {
+        showPomodoro: false,
+        showMusic: false,
+        showTasks: false,
+        showBackground: false,
+        showProfile: false,
+      };
+    }
+    const saved = localStorage.getItem("momentum-widgets-state");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return {
+          showPomodoro: false,
+          showMusic: false,
+          showTasks: false,
+          showBackground: false,
+          showProfile: false,
+        };
+      }
+    }
+    return {
+      showPomodoro: false,
+      showMusic: false,
+      showTasks: false,
+      showBackground: false,
+      showProfile: false,
+    };
+  };
+
+  const saveWidgetState = (state: {
+    showPomodoro: boolean;
+    showMusic: boolean;
+    showTasks: boolean;
+    showBackground: boolean;
+    showProfile: boolean;
+  }) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("momentum-widgets-state", JSON.stringify(state));
+    }
+  };
+
+  const initialState = loadWidgetState();
+  const [showPomodoro, setShowPomodoro] = useState(initialState.showPomodoro);
+  const [showMusic, setShowMusic] = useState(initialState.showMusic);
+  const [showTasks, setShowTasks] = useState(initialState.showTasks);
+  const [showBackground, setShowBackground] = useState(
+    initialState.showBackground
+  );
+  const [showProfile, setShowProfile] = useState(initialState.showProfile);
   const [currentBackground, setCurrentBackground] = useState<string>("");
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [activeDockItem, setActiveDockItem] = useState<string | null>(null);
 
-  // Rastrear posições dos widgets abertos
+  // Salva estado dos widgets sempre que mudar
+  useEffect(() => {
+    saveWidgetState({
+      showPomodoro,
+      showMusic,
+      showTasks,
+      showBackground,
+      showProfile,
+    });
+  }, [showPomodoro, showMusic, showTasks, showBackground, showProfile]);
+
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+  const { data: userFromQuery } = useQuery({
+    queryKey: ["userProfile"],
+    queryFn: () => api.get("/user").then((res) => res.data),
+    retry: 1,
+    enabled: !!token && !isGuestMode,
+    refetchOnMount: true, // Sempre refetch quando o componente monta
+    refetchOnWindowFocus: false, // Não refetch quando a janela ganha foco
+  });
+
+  const user = userProp || userFromQuery;
+
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    sessionStorage.setItem("logoutSuccess", "true");
+    window.location.reload();
+  };
+
   const [widgetPositions, setWidgetPositions] = useState<
     Record<string, { x: number; y: number }>
   >({});
 
-  // Posição padrão para todos os widgets
   const DEFAULT_POSITION = { x: 100, y: 100 };
-  // Usar tamanho maior para garantir margem de segurança na verificação
-  const WIDGET_SIZE = { width: 420, height: 400 }; // Tamanho aproximado dos widgets (inclui margem)
-  const OFFSET_STEP = 80; // Passo maior para garantir espaçamento adequado
+  const WIDGET_SIZE = { width: 420, height: 400 };
+  const OFFSET_STEP = 80;
 
-  // Função para verificar se duas posições se sobrepõem
   const positionsOverlap = (
     pos1: { x: number; y: number },
     pos2: { x: number; y: number },
@@ -52,12 +140,11 @@ const FocusApp = () => {
     );
   };
 
-  // Função para verificar se uma posição mantém o widget completamente dentro da viewport
   const isPositionWithinViewport = (
     position: { x: number; y: number },
     size: { width: number; height: number }
   ): boolean => {
-    const margin = 10; // Margem mínima das bordas
+    const margin = 10;
     return (
       position.x >= margin &&
       position.y >= margin &&
@@ -66,16 +153,13 @@ const FocusApp = () => {
     );
   };
 
-  // Função para calcular posição que não sobreponha widgets existentes
   const getWidgetPosition = (
     widgetId: "pomodoro" | "music" | "tasks" | "background",
-    excludeWidgetId?: boolean, // Se true, não inclui o próprio widget na lista de ocupados
-    forceRecalculate?: boolean // Se true, recalcula mesmo se já tiver posição salva
+    excludeWidgetId?: boolean,
+    forceRecalculate?: boolean
   ): { x: number; y: number } => {
-    // Se este widget já tem uma posição salva e não está forçando recálculo, verifica se ainda é válida
     if (widgetPositions[widgetId] && !forceRecalculate) {
       const savedPos = widgetPositions[widgetId];
-      // Verifica se a posição salva ainda não sobrepõe nenhum widget
       const widgetsToCheck = [
         showPomodoro && widgetId !== "pomodoro"
           ? {
@@ -104,16 +188,13 @@ const FocusApp = () => {
       if (isValid) {
         return savedPos;
       }
-      // Se não é válida, continua para recalcular
     }
 
-    // Lista de widgets abertos com suas posições (exceto o atual se excludeWidgetId for true)
     const openWidgetsWithPositions: {
       id: string;
       pos: { x: number; y: number };
     }[] = [];
 
-    // Se excludeWidgetId for true, exclui o widget atual da lista
     const shouldExclude = (id: string) =>
       excludeWidgetId === true && widgetId === id;
 
@@ -142,13 +223,10 @@ const FocusApp = () => {
       });
     }
 
-    // Pega as posições dos widgets já abertos
     const occupiedPositions = openWidgetsWithPositions.map((w) => w.pos);
 
-    // Tenta a posição padrão primeiro
     let candidatePosition = { ...DEFAULT_POSITION };
 
-    // Garante que a posição padrão está dentro da viewport
     const margin = 10;
     candidatePosition.x = Math.max(
       margin,
@@ -165,7 +243,6 @@ const FocusApp = () => {
       )
     );
 
-    // Verifica se a posição padrão está livre E dentro da viewport
     const defaultPositionFree = !occupiedPositions.some((pos) =>
       positionsOverlap(candidatePosition, pos, WIDGET_SIZE)
     );
@@ -178,18 +255,13 @@ const FocusApp = () => {
       return candidatePosition;
     }
 
-    // Se não está livre, encontra uma posição que não sobreponha
-    // Padrão SIMPLES: tenta posições em sequência
-    // Primeiro: direita (1,0), depois baixo (0,1), depois diagonal (1,1), etc.
     let attempt = 0;
-    const maxAttempts = 300; // Muitas tentativas para garantir
+    const maxAttempts = 300;
 
     while (attempt < maxAttempts) {
-      // Sequência simples: (1,0), (0,1), (1,1), (2,0), (0,2), (2,1), (1,2), (2,2), (3,0), ...
       let gridX = 0;
       let gridY = 0;
 
-      // Sequência determinística
       if (attempt === 0) {
         gridX = 1;
         gridY = 0;
@@ -197,24 +269,19 @@ const FocusApp = () => {
         gridX = 0;
         gridY = 1;
       } else {
-        // Para o resto, usa um padrão que percorre a grade de forma sistemática
         const ringSize = Math.ceil(Math.sqrt(attempt));
         const indexInRing = attempt - (ringSize - 1) ** 2;
 
         if (indexInRing < ringSize) {
-          // Lado direito do quadrado
           gridX = ringSize;
           gridY = indexInRing;
         } else if (indexInRing < ringSize * 2) {
-          // Lado inferior
           gridX = ringSize * 2 - indexInRing - 1;
           gridY = ringSize;
         } else if (indexInRing < ringSize * 3) {
-          // Lado esquerdo
           gridX = 0;
           gridY = ringSize * 3 - indexInRing - 1;
         } else {
-          // Lado superior
           gridX = indexInRing - ringSize * 3 + 1;
           gridY = 0;
         }
@@ -225,8 +292,7 @@ const FocusApp = () => {
         y: DEFAULT_POSITION.y + gridY * OFFSET_STEP,
       };
 
-      // Garante que não sai da tela - ajusta para que o widget fique completamente dentro
-      const margin = 10; // Margem mínima das bordas
+      const margin = 10;
       candidatePosition.x = Math.max(
         margin,
         Math.min(
@@ -242,9 +308,6 @@ const FocusApp = () => {
         )
       );
 
-      // CRÍTICO: Verifica duas coisas:
-      // 1. Se esta posição está livre (não sobrepõe nenhum widget existente)
-      // 2. Se o widget fica completamente dentro da viewport
       const isFree = !occupiedPositions.some((pos) =>
         positionsOverlap(candidatePosition, pos, WIDGET_SIZE)
       );
@@ -260,13 +323,9 @@ const FocusApp = () => {
       attempt++;
     }
 
-    // Se não encontrou posição livre após todas as tentativas, retorna a última tentativa
-    // (isso não deveria acontecer, mas é um fallback)
-
     return candidatePosition;
   };
 
-  // Função para atualizar posição de um widget quando ele é movido
   const updateWidgetPosition = (
     widgetId: "pomodoro" | "music" | "tasks" | "background",
     position: { x: number; y: number }
@@ -277,17 +336,13 @@ const FocusApp = () => {
     }));
   };
 
-  // Função para lidar com o fim do arraste e detectar sobreposições
   const handleDragEnd = (
     draggedWidgetId: "pomodoro" | "music" | "tasks" | "background",
     finalPosition: { x: number; y: number }
   ) => {
-    // Atualiza a posição do widget que foi arrastado
     updateWidgetPosition(draggedWidgetId, finalPosition);
 
-    // Aguarda um frame para garantir que o DOM foi atualizado
     requestAnimationFrame(() => {
-      // Obtém o tamanho real do widget arrastado usando a posição final
       const draggedWidgetElement = document.querySelector(
         `[data-widget-id="${draggedWidgetId}"]`
       ) as HTMLElement;
@@ -299,7 +354,6 @@ const FocusApp = () => {
         height: draggedWidgetElement.offsetHeight,
       };
 
-      // Lista de widgets a verificar
       const widgetsToCheck: Array<{
         id: "pomodoro" | "music" | "tasks" | "background";
       }> = [];
@@ -317,7 +371,6 @@ const FocusApp = () => {
         widgetsToCheck.push({ id: "background" });
       }
 
-      // Para cada widget, verifica sobreposição usando posições reais do DOM
       widgetsToCheck.forEach((widget) => {
         const otherWidgetElement = document.querySelector(
           `[data-widget-id="${widget.id}"]`
@@ -325,7 +378,6 @@ const FocusApp = () => {
 
         if (!otherWidgetElement) return;
 
-        // Obtém posição real do DOM (não do estado)
         const otherRect = otherWidgetElement.getBoundingClientRect();
         const otherPosition = {
           x: otherRect.left,
@@ -337,30 +389,23 @@ const FocusApp = () => {
           height: otherWidgetElement.offsetHeight,
         };
 
-        // Obtém posição do widget arrastado usando getBoundingClientRect
         const draggedRect = draggedWidgetElement.getBoundingClientRect();
         const draggedActualPosition = {
           x: draggedRect.left,
           y: draggedRect.top,
         };
 
-        // Verifica se há sobreposição
         if (
           positionsOverlap(draggedActualPosition, otherPosition, draggedSize) ||
           positionsOverlap(otherPosition, draggedActualPosition, otherSize)
         ) {
-          // Encontra uma nova posição livre para o widget sobreposto
-          // Exclui o widget arrastado e o próprio widget da lista
           const newPosition = getWidgetPosition(widget.id, true, true);
-
-          // Atualiza a posição do widget sobreposto
           updateWidgetPosition(widget.id, newPosition);
         }
       });
     });
   };
 
-  // Limpa posição quando widget fecha
   const clearWidgetPosition = (
     widgetId: "pomodoro" | "music" | "tasks" | "background"
   ) => {
@@ -375,6 +420,7 @@ const FocusApp = () => {
     setActiveTask(task);
     if (!showPomodoro) {
       setShowPomodoro(true);
+      setActiveDockItem("timer");
     }
   };
 
@@ -382,45 +428,97 @@ const FocusApp = () => {
     setActiveTask(null);
   };
 
-  return (
-    <div
-      className="min-h-screen bg-background relative overflow-hidden transition-all duration-500"
-      style={{
-        backgroundImage: currentBackground
-          ? `url(${currentBackground})`
-          : undefined,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
-      {/* Main Content Area */}
-      {!currentBackground && (
-        <div className="flex items-center justify-center min-h-screen p-8">
-          <div className="text-center">
-            <div className="flex flex-col items-center space-y-4 mb-8">
-              <img
-                src={momentumLogo}
-                alt="Momentum"
-                className="w-20 h-20 animate-float"
-              />
-              <h1 className="text-5xl font-bold text-foreground animate-float">
-                Momentum
-              </h1>
-            </div>
-            <p className="text-xl text-muted-foreground max-w-md mx-auto">
-              Um espaço para concentração, produtividade e bem-estar mental.
-            </p>
-          </div>
-        </div>
-      )}
+  const handleOpenWidget = (
+    widgetId: "pomodoro" | "music" | "tasks" | "background" | "profile"
+  ) => {
+    if (widgetId === "profile") {
+      // Toggle para profile
+      if (showProfile) {
+        setShowProfile(false);
+        setActiveDockItem(null);
+        return;
+      }
+      setShowProfile(true);
+      setActiveDockItem("profile");
+      return;
+    }
 
+    const widgetKey = widgetId as "pomodoro" | "music" | "tasks" | "background";
+
+    // Toggle: se já está aberto, fecha
+    if (widgetId === "pomodoro" && showPomodoro) {
+      setShowPomodoro(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "music" && showMusic) {
+      setShowMusic(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "tasks" && showTasks) {
+      setShowTasks(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "background" && showBackground) {
+      setShowBackground(false);
+      setActiveDockItem(null);
+      return;
+    }
+
+    // Se não está aberto, abre
+    setActiveDockItem(widgetKey);
+
+    if (widgetId === "pomodoro") {
+      const initialPos = getWidgetPosition("pomodoro", true, true);
+      setWidgetPositions((prev) => ({
+        ...prev,
+        pomodoro: initialPos,
+      }));
+      setShowPomodoro(true);
+    }
+    if (widgetId === "music") {
+      const initialPos = getWidgetPosition("music", true, true);
+      setWidgetPositions((prev) => ({
+        ...prev,
+        music: initialPos,
+      }));
+      setShowMusic(true);
+    }
+    if (widgetId === "tasks") {
+      const initialPos = getWidgetPosition("tasks", true, true);
+      setWidgetPositions((prev) => ({
+        ...prev,
+        tasks: initialPos,
+      }));
+      setShowTasks(true);
+    }
+    if (widgetId === "background") {
+      const initialPos = getWidgetPosition("background", true, true);
+      setWidgetPositions((prev) => ({
+        ...prev,
+        background: initialPos,
+      }));
+      setShowBackground(true);
+    }
+  };
+
+  return (
+    <Layout
+      backgroundImage={currentBackground}
+      userName={user?.name}
+      onLogout={handleLogout}
+    >
       {/* Widgets */}
       {showPomodoro && (
-        <PomodoroWidget
+        <TimerWidget
           onClose={() => {
             setShowPomodoro(false);
             clearWidgetPosition("pomodoro");
+            setActiveDockItem(
+              activeDockItem === "pomodoro" ? null : activeDockItem
+            );
           }}
           activeTask={activeTask}
           onTaskComplete={handleTaskComplete}
@@ -438,6 +536,9 @@ const FocusApp = () => {
           onClose={() => {
             setShowMusic(false);
             clearWidgetPosition("music");
+            setActiveDockItem(
+              activeDockItem === "music" ? null : activeDockItem
+            );
           }}
           defaultPosition={
             widgetPositions["music"] || getWidgetPosition("music")
@@ -453,6 +554,9 @@ const FocusApp = () => {
           onClose={() => {
             setShowTasks(false);
             clearWidgetPosition("tasks");
+            setActiveDockItem(
+              activeDockItem === "tasks" ? null : activeDockItem
+            );
           }}
           onTaskStart={handleTaskStart}
           defaultPosition={
@@ -461,14 +565,18 @@ const FocusApp = () => {
           onPositionChange={(pos) => updateWidgetPosition("tasks", pos)}
           onDragEnd={(pos) => handleDragEnd("tasks", pos)}
           widgetId="tasks"
+          isGuestMode={isGuestMode}
         />
       )}
 
       {showBackground && (
-        <BackgroundSelector
+        <BackgroundWidget
           onClose={() => {
             setShowBackground(false);
             clearWidgetPosition("background");
+            setActiveDockItem(
+              activeDockItem === "background" ? null : activeDockItem
+            );
           }}
           onBackgroundSelect={setCurrentBackground}
           currentBackground={currentBackground}
@@ -481,52 +589,48 @@ const FocusApp = () => {
         />
       )}
 
-      {/* Draggable Toolbar */}
-      <DraggableToolbar
-        onOpenPomodoro={() => {
-          if (!showPomodoro) {
-            // Calcula e salva a posição inicial ANTES de abrir
-            // Force recalcula para garantir que não sobreponha
-            const initialPos = getWidgetPosition("pomodoro", true, true);
-            setWidgetPositions((prev) => ({
-              ...prev,
-              pomodoro: initialPos,
-            }));
+      {/* Dock */}
+      <Dock
+        activeItem={
+          showPomodoro
+            ? "pomodoro"
+            : showMusic
+            ? "music"
+            : showTasks
+            ? "tasks"
+            : showBackground
+            ? "background"
+            : showProfile
+            ? "profile"
+            : undefined
+        }
+        onTimerClick={() => handleOpenWidget("pomodoro")}
+        onMusicClick={() => handleOpenWidget("music")}
+        onTasksClick={() => handleOpenWidget("tasks")}
+        onBackgroundClick={() => handleOpenWidget("background")}
+        onProfileClick={() => {
+          if (isGuestMode) {
+            // Em modo visitante, redirecionar para login
+            window.location.href = "/login";
+            return;
           }
-          setShowPomodoro(true);
-        }}
-        onOpenMusic={() => {
-          if (!showMusic) {
-            const initialPos = getWidgetPosition("music", true, true);
-            setWidgetPositions((prev) => ({
-              ...prev,
-              music: initialPos,
-            }));
-          }
-          setShowMusic(true);
-        }}
-        onOpenTasks={() => {
-          if (!showTasks) {
-            const initialPos = getWidgetPosition("tasks", true, true);
-            setWidgetPositions((prev) => ({
-              ...prev,
-              tasks: initialPos,
-            }));
-          }
-          setShowTasks(true);
-        }}
-        onOpenBackground={() => {
-          if (!showBackground) {
-            const initialPos = getWidgetPosition("background", true, true);
-            setWidgetPositions((prev) => ({
-              ...prev,
-              background: initialPos,
-            }));
-          }
-          setShowBackground(true);
+          handleOpenWidget("profile");
         }}
       />
-    </div>
+
+      {/* Profile Modal - apenas se não for visitante */}
+      {!isGuestMode && (
+        <ProfileModal
+          open={showProfile}
+          onOpenChange={(open) => {
+            setShowProfile(open);
+            if (!open) {
+              setActiveDockItem(null);
+            }
+          }}
+        />
+      )}
+    </Layout>
   );
 };
 

@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { X, Minus, Square } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface DraggableWidgetProps {
@@ -12,6 +11,7 @@ interface DraggableWidgetProps {
   onPositionChange?: (position: { x: number; y: number }) => void;
   onDragEnd?: (finalPosition: { x: number; y: number }) => void;
   widgetId?: string;
+  headerActions?: React.ReactNode;
 }
 
 export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
@@ -23,6 +23,7 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
   onPositionChange,
   onDragEnd,
   widgetId,
+  headerActions,
 }) => {
   const [position, setPosition] = useState(defaultPosition);
   const [isDragging, setIsDragging] = useState(false);
@@ -201,8 +202,7 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
       ref={widgetRef}
       data-widget-id={widgetId}
       className={cn(
-        "fixed bg-widget-background border border-widget-border rounded-lg shadow-widget backdrop-blur-sm bg-opacity-95 z-40",
-        // Remove transição durante o arraste para melhor performance e responsividade
+        "fixed zen-widget z-40",
         !isDragging && "transition-all duration-200",
         isDragging && "cursor-grabbing will-change-transform transition-none",
         !isDragging && "cursor-grab",
@@ -212,39 +212,41 @@ export const DraggableWidget: React.FC<DraggableWidgetProps> = ({
       style={{
         left: position.x,
         top: position.y,
-        // Usa transform durante o arraste para melhor performance (GPU acceleration)
         transform: isDragging ? "translateZ(0)" : undefined,
       }}
       onMouseDown={handleMouseDown}
     >
-      {/* Widget Header */}
-      <div className="flex items-center justify-between p-3 border-b border-widget-border bg-gradient-subtle rounded-t-lg">
-        <h3 className="font-medium text-foreground select-none">{title}</h3>
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
+      <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <h3
+          className="text-sm font-medium zen-text-ghost select-none"
+          style={{ fontWeight: 500 }}
+        >
+          {title}
+        </h3>
+        <div className="flex items-center gap-1">
+          {headerActions}
+          <button
             onClick={() => setIsMinimized(!isMinimized)}
-            className="h-6 w-6 p-0 hover:bg-muted"
+            className="h-6 w-6 p-0 rounded hover:bg-white/10 transition-colors flex items-center justify-center"
           >
             {isMinimized ? (
-              <Square className="h-3 w-3" />
+              <Square className="h-3 w-3 zen-text-muted" strokeWidth={1.5} />
             ) : (
-              <Minus className="h-3 w-3" />
+              <Minus className="h-3 w-3 zen-text-muted" strokeWidth={1.5} />
             )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
+          </button>
+          <button
             onClick={onClose}
-            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+            className="h-6 w-6 p-0 rounded hover:bg-white/10 transition-colors flex items-center justify-center"
           >
-            <X className="h-3 w-3" />
-          </Button>
+            <X
+              className="h-3 w-3 zen-text-muted hover:zen-text-ghost transition-colors"
+              strokeWidth={1.5}
+            />
+          </button>
         </div>
       </div>
 
-      {/* Widget Content */}
       {!isMinimized && <div className="overflow-hidden">{children}</div>}
     </div>
   );

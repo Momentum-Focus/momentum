@@ -8,6 +8,13 @@ import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import ForgotPassword from "./pages/ForgotPassword";
 import NotFound from "./pages/NotFound";
+import SpotifyCallback from "./pages/SpotifyCallback";
+import AuthCallback from "./pages/AuthCallback";
+import CompleteProfile from "./pages/CompleteProfile";
+import Plans from "./pages/Plans";
+import { SubscriptionProvider } from "./context/subscription-context";
+import { MusicPlayerProvider } from "./context/music-player-context";
+import { HeadlessMusicPlayer } from "./components/HeadlessMusicPlayer";
 
 const queryClient = new QueryClient();
 
@@ -16,16 +23,30 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
+      <SubscriptionProvider>
+        <MusicPlayerProvider>
+          <HeadlessMusicPlayer />
+          <BrowserRouter
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true,
+            }}
+          >
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/spotify/callback" element={<SpotifyCallback />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/complete-profile" element={<CompleteProfile />} />
+              <Route path="/plans" element={<Plans />} />
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </MusicPlayerProvider>
+      </SubscriptionProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
