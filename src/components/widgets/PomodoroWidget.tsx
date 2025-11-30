@@ -5,6 +5,7 @@ import { Task, PomodoroMode } from "../FocusApp";
 import { api } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/context/theme-context";
 import { useFocusSettings } from "@/hooks/use-focus-settings";
 import {
   Dialog,
@@ -45,6 +46,7 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
   const [showSettings, setShowSettings] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+  const { themeColor } = useTheme();
   const queryClient = useQueryClient();
   const {
     data: focusSettings,
@@ -518,7 +520,15 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
                       parseInt(e.target.value, 10) || 1
                     )
                   }
-                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:outline-none transition-all"
+                  onFocus={(e) => {
+                    e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`;
+                    e.currentTarget.style.borderColor = `${themeColor}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                  }}
                 />
               </div>
 
@@ -536,7 +546,15 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
                       parseInt(e.target.value, 10) || 1
                     )
                   }
-                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:outline-none transition-all"
+                  onFocus={(e) => {
+                    e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`;
+                    e.currentTarget.style.borderColor = `${themeColor}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                  }}
                 />
               </div>
 
@@ -554,7 +572,15 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
                       parseInt(e.target.value, 10) || 1
                     )
                   }
-                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:outline-none transition-all"
+                  onFocus={(e) => {
+                    e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`;
+                    e.currentTarget.style.borderColor = `${themeColor}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                  }}
                 />
               </div>
 
@@ -572,7 +598,15 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
                       parseInt(e.target.value, 10) || 1
                     )
                   }
-                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                  className="bg-white/5 border-white/10 rounded-xl h-11 text-white/90 focus:ring-1 focus:outline-none transition-all"
+                  onFocus={(e) => {
+                    e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`;
+                    e.currentTarget.style.borderColor = `${themeColor}80`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                  }}
                 />
               </div>
             </div>
@@ -581,7 +615,17 @@ export const PomodoroWidget: React.FC<PomodoroWidgetProps> = ({
               <Button
                 onClick={handleSaveTimer}
                 disabled={!isTimerDirty || isSavingFocus}
-                className="flex-1 h-11 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-base font-medium transition-all shadow-lg shadow-blue-500/20"
+                className="flex-1 h-11 disabled:opacity-50 text-white rounded-xl text-base font-medium transition-all shadow-lg"
+                style={{
+                  backgroundColor: themeColor,
+                  boxShadow: `0 0 20px ${themeColor}30`,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor = `${themeColor}E6`)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = themeColor)
+                }
               >
                 {isSavingFocus ? "Salvando..." : "Salvar"}
               </Button>
