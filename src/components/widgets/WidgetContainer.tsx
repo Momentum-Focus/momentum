@@ -1,7 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useDragControls } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/context/theme-context";
+import { useUIStore } from "@/stores/ui.store";
+import { calculateSafePosition } from "@/hooks/useWindowBoundaries";
 
 interface WidgetContainerProps {
   title: string;
@@ -28,74 +31,90 @@ export const WidgetContainer: React.FC<WidgetContainerProps> = ({
   draggable = true,
   headerActions,
 }) => {
-  const [position, setPosition] = useState(defaultPosition);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
-  const widgetSizeRef = useRef({ width: 300, height: 200 });
-  const isDraggingRef = useRef(false);
-  const positionRef = useRef(defaultPosition);
-  const rafIdRef = useRef<number | null>(null);
+  const dragControls = useDragControls();
+  const { themeColor } = useTheme();
 
-  // Função para ajustar posição dentro da viewport
-  const adjustPositionToViewport = useCallback(
-    (pos: { x: number; y: number }) => {
-      const widgetWidth = widgetRef.current?.offsetWidth || 300;
-      const widgetHeight = widgetRef.current?.offsetHeight || 200;
-      const margin = 10;
+  // Window Stack Management
+  const {
+    bringToFront,
+    getZIndex,
+    removeFromStack,
+    updatePosition,
+    widgetPositions,
+    toggleWidget,
+  } = useUIStore();
 
-      return {
-        x: Math.max(
-          margin,
-          Math.min(pos.x, window.innerWidth - widgetWidth - margin)
-        ),
-        y: Math.max(
-          margin,
-          Math.min(pos.y, window.innerHeight - widgetHeight - margin)
-        ),
-      };
-    },
-    []
-  );
+  // Window Stack Management
+  const windowStack = useUIStore((state) => state.windowStack);
+  const zIndex = widgetId ? getZIndex(widgetId) : 50;
 
-  // Atualiza positionRef quando position muda
+  // Track drag start position to calculate final position correctly
+  const dragStartPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Get current position from store or use default
+  const storePos = widgetId ? widgetPositions[widgetId] : undefined;
+  const initialPosition = storePos || defaultPosition;
+
+  // Use position state - sync with store but don't interfere during drag
+  const [motionX, setMotionX] = useState(initialPosition.x);
+  const [motionY, setMotionY] = useState(initialPosition.y);
+
+  // Track initialization to prevent loops
+  const initializedRef = useRef<string | null>(null);
+
+  // Initialize widget and add to stack (only once per widgetId on mount)
   useEffect(() => {
-    positionRef.current = position;
-  }, [position]);
+    if (!widgetId) return;
 
-  // Sincroniza com defaultPosition apenas quando não está arrastando
-  useEffect(() => {
-    if (!isDraggingRef.current) {
-      const adjustedPosition = adjustPositionToViewport(defaultPosition);
-      if (
-        adjustedPosition.x !== positionRef.current.x ||
-        adjustedPosition.y !== positionRef.current.y
-      ) {
-        setPosition(adjustedPosition);
-      }
+    // Only initialize once
+    if (initializedRef.current === widgetId) return;
+    initializedRef.current = widgetId;
+
+    // Add widget to stack
+    toggleWidget(widgetId);
+
+    // Initialize position if not in store
+    const currentStorePos = widgetPositions[widgetId];
+    if (!currentStorePos) {
+      const { initializeWidget } = useUIStore.getState();
+      const widgetWidth = 400;
+      const widgetHeight = 600;
+      const pos = initializeWidget(widgetId, widgetWidth, widgetHeight);
+      setMotionX(pos.x);
+      setMotionY(pos.y);
+    } else {
+      setMotionX(currentStorePos.x);
+      setMotionY(currentStorePos.y);
     }
-  }, [defaultPosition, adjustPositionToViewport]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setPosition((currentPos) => adjustPositionToViewport(currentPos));
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [adjustPositionToViewport]);
-
-  const headerRef = useRef<HTMLDivElement>(null);
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (!draggable) return;
-
-      // Verifica se o clique foi no header (drag handle)
-      if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
-        return; // Não inicia drag se não foi no header
+    // Cleanup: remove from stack only on unmount
+    return () => {
+      if (initializedRef.current === widgetId) {
+        removeFromStack(widgetId);
+        initializedRef.current = null;
       }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on mount/unmount
 
-      // Ignora cliques em botões
+  // Sync with store position changes (but don't interfere during drag)
+  useEffect(() => {
+    if (!widgetId || !storePos || dragStartPositionRef.current) {
+      return;
+    }
+
+    // Only update if position actually changed
+    if (storePos.x !== motionX || storePos.y !== motionY) {
+      setMotionX(storePos.x);
+      setMotionY(storePos.y);
+    }
+  }, [widgetId, storePos, motionX, motionY]);
+
+  // Handle pointer down to bring widget to front (CRITICAL: Use Capture for instant feedback)
+  const handlePointerDownCapture = useCallback(
+    (e: React.PointerEvent) => {
+      // Don't bring to front if clicking on buttons
       if (
         e.target instanceof HTMLElement &&
         (e.target.tagName === "BUTTON" || e.target.closest("button"))
@@ -103,137 +122,125 @@ export const WidgetContainer: React.FC<WidgetContainerProps> = ({
         return;
       }
 
-      // Previne comportamento padrão
-      e.preventDefault();
-
-      isDraggingRef.current = true;
-      setIsDragging(true);
-
-      if (widgetRef.current) {
-        widgetSizeRef.current = {
-          width: widgetRef.current.offsetWidth,
-          height: widgetRef.current.offsetHeight,
-        };
-      }
-
-      const rect = widgetRef.current?.getBoundingClientRect();
-      if (rect) {
-        dragOffsetRef.current = {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-        };
+      if (widgetId) {
+        bringToFront(widgetId);
       }
     },
-    [draggable]
+    [widgetId, bringToFront]
   );
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDraggingRef.current) return;
+  // Handle drag start - store initial position
+  const handleDragStart = useCallback(() => {
+    if (!widgetRef.current) return;
 
-    // Cancela o frame anterior se existir
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-    }
+    // Store the position where drag started
+    dragStartPositionRef.current = { x: motionX, y: motionY };
+  }, [motionX, motionY]);
 
-    // Usa requestAnimationFrame para suavizar o movimento
-    rafIdRef.current = requestAnimationFrame(() => {
-      if (!isDraggingRef.current) return;
-
-      const newX = e.clientX - dragOffsetRef.current.x;
-      const newY = e.clientY - dragOffsetRef.current.y;
-
-      const margin = 10;
-      const maxX = window.innerWidth - widgetSizeRef.current.width - margin;
-      const maxY = window.innerHeight - widgetSizeRef.current.height - margin;
-
-      const newPosition = {
-        x: Math.max(margin, Math.min(newX, maxX)),
-        y: Math.max(margin, Math.min(newY, maxY)),
-      };
-
-      // Atualiza posição diretamente sem causar re-renders desnecessários
-      positionRef.current = newPosition;
-      setPosition(newPosition);
-    });
-  }, []);
-
-  const handleMouseUp = useCallback(() => {
-    if (!isDraggingRef.current) return;
-
-    isDraggingRef.current = false;
-    setIsDragging(false);
-
-    // Cancela qualquer frame pendente
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-
-    // Notifica mudanças de posição apenas no final do drag
-    const finalPosition = positionRef.current;
-    if (onPositionChange) {
-      onPositionChange(finalPosition);
-    }
-    if (onDragEnd) {
-      onDragEnd(finalPosition);
-    }
-  }, [onPositionChange, onDragEnd]);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove, {
-        passive: false,
-      });
-      document.addEventListener("mouseup", handleMouseUp);
-      // Previne seleção de texto durante o drag
-      document.body.style.userSelect = "none";
-      document.body.style.cursor = "grabbing";
-    } else {
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
+  // Handle drag end to sync final position (ANTI-TELEPORT LOGIC)
+  const handleDragEnd = useCallback(
+    (_event: any, info: { offset: { x: number; y: number } }) => {
+      if (!widgetId || !widgetRef.current || !dragStartPositionRef.current) {
+        dragStartPositionRef.current = null;
+        return;
       }
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+      // CRITICAL: Calculate absolute position from drag start position + offset
+      // This ensures accurate calculation without state conflicts
+      const finalX = dragStartPositionRef.current.x + info.offset.x;
+      const finalY = dragStartPositionRef.current.y + info.offset.y;
+
+      // Get widget dimensions
+      const widgetWidth = widgetRef.current.offsetWidth || 300;
+      const widgetHeight = widgetRef.current.offsetHeight || 200;
+
+      // Calculate safe position within boundaries (hard limits)
+      const safePosition = calculateSafePosition(
+        finalX,
+        finalY,
+        widgetWidth,
+        widgetHeight
+      );
+
+      // Clear drag start position
+      dragStartPositionRef.current = null;
+
+      // Update motion values immediately (prevents teleport)
+      setMotionX(safePosition.x);
+      setMotionY(safePosition.y);
+
+      // Update store with absolute position
+      updatePosition(widgetId, safePosition.x, safePosition.y);
+
+      // Call parent callbacks
+      if (onPositionChange) {
+        onPositionChange(safePosition);
+      }
+      if (onDragEnd) {
+        onDragEnd(safePosition);
+      }
+    },
+    [widgetId, updatePosition, onPositionChange, onDragEnd]
+  );
+
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // Handle drag start from header only
+  const handleHeaderPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (!draggable) return;
+
+      // Ignore button clicks
+      if (
+        e.target instanceof HTMLElement &&
+        (e.target.tagName === "BUTTON" || e.target.closest("button"))
+      ) {
+        return;
+      }
+
+      // Start drag from header
+      dragControls.start(e);
+    },
+    [draggable, dragControls]
+  );
 
   return (
     <motion.div
       ref={widgetRef}
       data-widget-id={widgetId}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, x: motionX, y: motionY + 20 }}
+      animate={{
+        opacity: 1,
+        x: motionX,
+        y: motionY,
+      }}
       exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className={cn(
-        "fixed zen-glass rounded-3xl z-40 flex flex-col",
-        isDragging && "cursor-grabbing will-change-transform",
-        !isDragging && "cursor-default",
-        className
-      )}
+      className={cn("fixed zen-glass rounded-3xl flex flex-col", className)}
       style={{
-        left: position.x,
-        top: position.y,
-        transition: isDragging ? "none" : undefined,
-        transform: "translate(0, 0)", // Força transform para melhor performance
+        zIndex: zIndex,
       }}
+      drag={draggable}
+      dragControls={dragControls}
+      dragMomentum={false}
+      dragElastic={0}
+      dragConstraints={false}
+      layout={false}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onPointerDownCapture={handlePointerDownCapture}
+      whileDrag={{ cursor: "grabbing" }}
+      dragTransition={{ power: 0, timeConstant: 0 }}
     >
       {/* Header - Drag Handle */}
       <div
         ref={headerRef}
         className={cn(
-          "flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0",
+          "flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0 select-none",
           draggable && "cursor-grab active:cursor-grabbing"
         )}
-        onMouseDown={handleMouseDown}
+        onPointerDown={handleHeaderPointerDown}
+        style={{ touchAction: "none" }}
       >
         <h3 className="text-sm font-light text-white/90 tracking-wide select-none">
           {title}
@@ -241,8 +248,26 @@ export const WidgetContainer: React.FC<WidgetContainerProps> = ({
         <div className="flex items-center gap-1">
           {headerActions}
           <button
-            onClick={onClose}
-            className="h-6 w-6 p-0 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center group"
+            onClick={() => {
+              if (widgetId) {
+                removeFromStack(widgetId);
+              }
+              onClose();
+            }}
+            className="h-6 w-6 p-0 rounded-lg transition-colors flex items-center justify-center group relative"
+            style={{
+              border: "none",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = `${themeColor}20`;
+              e.currentTarget.style.borderColor = themeColor;
+              e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "";
+              e.currentTarget.style.borderColor = "";
+              e.currentTarget.style.boxShadow = "";
+            }}
           >
             <X
               className="h-3.5 w-3.5 text-white/50 group-hover:text-white/90 transition-colors"
