@@ -105,28 +105,50 @@ const FocusApp: React.FC<FocusAppProps> = ({
   const [showProfile, setShowProfile] = useState(initialState.showProfile);
   const [showSupport, setShowSupport] = useState(initialState.showSupport);
   // Load background from localStorage
-  const loadBackground = () => {
+  const loadBackground = (): { url: string; type?: "IMAGE" | "VIDEO" } => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("momentum-background");
-      return saved || "";
+      try {
+        const saved = localStorage.getItem("momentum-background");
+        if (saved) {
+          // Try to parse as JSON (new format with type)
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed.url) {
+              return parsed;
+            }
+          } catch {
+            // If not JSON, treat as old format (just URL string)
+            return { url: saved };
+          }
+        }
+      } catch (error) {
+        console.error("Error loading background from localStorage:", error);
+      }
     }
-    return "";
+    return { url: "" };
   };
 
-  const [currentBackground, setCurrentBackground] = useState<string>(
-    loadBackground()
-  );
+  const [backgroundState, setBackgroundState] = useState<{
+    url: string;
+    type?: "IMAGE" | "VIDEO";
+  }>(loadBackground());
+
+  const currentBackground = backgroundState.url;
 
   // Persist background to localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       if (currentBackground) {
-        localStorage.setItem("momentum-background", currentBackground);
+        // Save as JSON with type information
+        localStorage.setItem(
+          "momentum-background",
+          JSON.stringify(backgroundState)
+        );
       } else {
         localStorage.removeItem("momentum-background");
       }
     }
-  }, [currentBackground]);
+  }, [currentBackground, backgroundState]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeDockItem, setActiveDockItem] = useState<string | null>(null);
 
@@ -796,7 +818,9 @@ const FocusApp: React.FC<FocusAppProps> = ({
               activeDockItem === "background" ? null : activeDockItem
             );
           }}
-          onBackgroundSelect={setCurrentBackground}
+          onBackgroundSelect={(url: string, type?: "IMAGE" | "VIDEO") => {
+            setBackgroundState({ url, type });
+          }}
           currentBackground={currentBackground}
           defaultPosition={
             widgetPositions["background"] || getWidgetPosition("background")

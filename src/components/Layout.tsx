@@ -10,6 +10,36 @@ interface LayoutProps {
   onLogout?: () => void;
 }
 
+// Helper function to check if URL is a video
+const isVideoUrl = (url: string): boolean => {
+  if (!url) return false;
+
+  // First, check localStorage for stored type info
+  try {
+    const saved = localStorage.getItem("momentum-background");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.url === url && parsed.type === "VIDEO") {
+          return true;
+        }
+        if (parsed.url === url && parsed.type === "IMAGE") {
+          return false;
+        }
+      } catch {
+        // Not JSON format, continue to extension check
+      }
+    }
+  } catch (error) {
+    // Continue to extension check
+  }
+
+  // Fallback: Check by file extension
+  const lowerUrl = url.toLowerCase();
+  const videoExtensions = [".mp4", ".webm", ".ogg", ".mov", ".avi", ".mkv"];
+  return videoExtensions.some((ext) => lowerUrl.includes(ext));
+};
+
 export const Layout: React.FC<LayoutProps> = ({
   children,
   backgroundImage,
@@ -20,12 +50,31 @@ export const Layout: React.FC<LayoutProps> = ({
     <div className="h-screen w-screen overflow-hidden relative">
       {/* Background Image/Video */}
       {backgroundImage && (
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: `url(${backgroundImage})`,
-          }}
-        />
+        <>
+          {isVideoUrl(backgroundImage) ? (
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ zIndex: 0 }}
+            >
+              <source src={backgroundImage} type="video/mp4" />
+              <source src={backgroundImage} type="video/webm" />
+              {/* Fallback para navegadores que não suportam vídeo */}
+              Seu navegador não suporta vídeos como background.
+            </video>
+          ) : (
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+              style={{
+                backgroundImage: `url(${backgroundImage})`,
+                zIndex: 0,
+              }}
+            />
+          )}
+        </>
       )}
 
       {/* Overlay Gradient */}
