@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Upload, Check, Palette } from "lucide-react";
+import { Upload, Check, Palette, Trash2 } from "lucide-react";
 import { WidgetContainer } from "./WidgetContainer";
 import { motion } from "framer-motion";
 import { useFeatureCheck } from "@/hooks/use-feature-check";
@@ -9,10 +9,22 @@ import { useToast } from "@/hooks/use-toast";
 import { AuthWall } from "@/components/AuthWall";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { AlertTriangle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface BackgroundWidgetProps {
   onClose: () => void;
-  onBackgroundSelect: (background: string) => void;
+  onBackgroundSelect: (background: string, type?: "IMAGE" | "VIDEO") => void;
   currentBackground: string;
   defaultPosition?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
@@ -67,11 +79,36 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
     useFeatureCheck();
   const { themeColor, setThemeColor, hasCustomization } = useTheme();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<"background" | "theme">(
     "background"
   );
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [mediaToDelete, setMediaToDelete] = useState<number | null>(null);
   const canUploadVideos = hasFeature("VIDEO_BACKGROUND");
+
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+
+  // Buscar mídias do usuário
+  const { data: userMedia = [], isLoading: isLoadingMedia } = useQuery<
+    Array<{
+      id: number;
+      url: string;
+      type: "IMAGE" | "VIDEO";
+      createdAt: string;
+    }>
+  >({
+    queryKey: ["userMedia"],
+    queryFn: async () => {
+      const { data } = await api.get("/media/user");
+      return data;
+    },
+    enabled: !!token,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
 
   const THEME_PRESETS = [
     { name: "Azul", value: "#3B82F6", label: "Padrão" },
@@ -86,6 +123,7 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Validação frontend para vídeos (backend também valida)
     if (file.type.startsWith("video/")) {
       if (!requireFeature("VIDEO_BACKGROUND", "Fundo em Vídeo", "Flow")) {
         return;
@@ -97,35 +135,95 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
     setIsUploading(true);
 
     try {
-      const { data } = await api.post("/media/background/upload", formData, {
+      const { data } = await api.post("/media/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
-      onBackgroundSelect(data.url);
+
+      // data contém: { id, url, type }
+      onBackgroundSelect(data.url, data.type);
+
+      // Invalidar query para atualizar a lista
+      queryClient.invalidateQueries({ queryKey: ["userMedia"] });
+
       toast({
-        title: "Plano de fundo atualizado",
-        description: data.isVideo
-          ? "Vídeo aplicado com sucesso."
-          : "Imagem aplicada com sucesso.",
+        title: "Upload realizado com sucesso",
+        description:
+          data.type === "VIDEO"
+            ? "Vídeo enviado e salvo com sucesso."
+            : "Imagem enviada e salva com sucesso.",
       });
     } catch (error: any) {
+      const statusCode = error.response?.status;
       const message =
         error.response?.data?.message ||
-        "Não foi possível carregar o fundo. Tente novamente.";
-      toast({
-        title: "Erro ao carregar",
-        description: message,
-        variant: "destructive",
-      });
-      // O hook useFeatureCheck já redireciona para /plans se necessário
+        "Não foi possível fazer o upload. Tente novamente.";
+
+      if (statusCode === 403) {
+        toast({
+          title: "Upgrade necessário",
+          description: "Upgrade to Flow/Epic to upload videos.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao fazer upload",
+          description: message,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsUploading(false);
+      // Reset input para permitir selecionar o mesmo arquivo novamente
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
-  const handlePresetSelect = (background: string) => {
-    onBackgroundSelect(background);
+  const handlePresetSelect = (background: string, type?: "IMAGE" | "VIDEO") => {
+    onBackgroundSelect(background, type);
+  };
+
+  const handleDeleteClick = (mediaId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevenir seleção do background ao clicar no delete
+    setMediaToDelete(mediaId);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!mediaToDelete) return;
+
+    try {
+      await api.delete(`/media/${mediaToDelete}`);
+
+      // Invalidar query para atualizar a lista
+      queryClient.invalidateQueries({ queryKey: ["userMedia"] });
+
+      // Se a mídia excluída era o background atual, limpar
+      const deletedMedia = userMedia.find((m) => m.id === mediaToDelete);
+      if (deletedMedia && currentBackground === deletedMedia.url) {
+        onBackgroundSelect("");
+      }
+
+      toast({
+        title: "Mídia excluída",
+        description: "A imagem/vídeo foi excluído com sucesso.",
+      });
+
+      setShowDeleteConfirm(false);
+      setMediaToDelete(null);
+    } catch (error: any) {
+      const message =
+        error.response?.data?.message ||
+        "Não foi possível excluir a mídia. Tente novamente.";
+      toast({
+        title: "Erro ao excluir",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -198,6 +296,110 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
               onOpenChange={setShowAuthWall}
               message="Faça login ou crie uma conta para usar fundos personalizados."
             />
+
+            {/* User Uploaded Media */}
+            {token && (
+              <div className="space-y-3">
+                <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
+                  Meus Uploads
+                </h3>
+                {isLoadingMedia ? (
+                  <div className="text-center py-8 text-white/50 text-sm">
+                    Carregando...
+                  </div>
+                ) : userMedia.length === 0 ? (
+                  <div className="text-center py-8 text-white/50 text-sm">
+                    Nenhum upload ainda
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
+                    {userMedia.map((media) => {
+                      const isSelected = currentBackground === media.url;
+                      const isVideo = media.type === "VIDEO";
+
+                      return (
+                        <motion.div
+                          key={media.id}
+                          className="relative group"
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <button
+                            onClick={() =>
+                              handlePresetSelect(media.url, media.type)
+                            }
+                            className={cn(
+                              "relative w-full rounded-lg overflow-hidden border-2 transition-all",
+                              isSelected
+                                ? "ring-2"
+                                : "border-white/10 hover:border-white/20"
+                            )}
+                            style={
+                              isSelected
+                                ? {
+                                    borderColor: themeColor,
+                                    ringColor: `${themeColor}50`,
+                                  }
+                                : {}
+                            }
+                          >
+                            {isVideo ? (
+                              <div className="w-full h-24 bg-black/60 relative flex items-center justify-center overflow-hidden">
+                                <video
+                                  src={media.url}
+                                  className="w-full h-full object-cover opacity-50"
+                                  muted
+                                  playsInline
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                  <div className="text-2xl text-white/70">
+                                    ▶
+                                  </div>
+                                </div>
+                                <div className="absolute bottom-1 right-1 text-[8px] text-white/80 bg-black/70 px-1.5 py-0.5 rounded font-medium">
+                                  Vídeo
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                className="w-full h-24 bg-cover bg-center relative"
+                                style={{ backgroundImage: `url(${media.url})` }}
+                              >
+                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                              </div>
+                            )}
+                            {isSelected && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center z-10"
+                                style={{ backgroundColor: themeColor }}
+                              >
+                                <Check
+                                  className="h-3 w-3 text-white"
+                                  strokeWidth={2}
+                                />
+                              </motion.div>
+                            )}
+                          </button>
+                          {/* Botão de exclusão */}
+                          <button
+                            onClick={(e) => handleDeleteClick(media.id, e)}
+                            className={cn(
+                              "absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity z-20",
+                              "bg-red-500/90 hover:bg-red-500 text-white"
+                            )}
+                            title="Excluir imagem/vídeo"
+                          >
+                            <Trash2 className="h-3 w-3" strokeWidth={2} />
+                          </button>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Preset Backgrounds */}
             <div className="space-y-3">
@@ -358,6 +560,43 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
           )}
         </Tabs>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="bg-[#0F1115]/95 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl p-0 max-w-md">
+          <AlertDialogHeader className="p-6 pb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <AlertDialogTitle className="text-xl font-light text-white/90">
+                Excluir mídia?
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-sm text-white/60 font-light leading-relaxed pt-2">
+              Tem certeza que deseja excluir esta imagem/vídeo? Esta ação não
+              pode ser desfeita e o arquivo será permanentemente removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="p-6 pt-4 flex-row justify-end gap-3">
+            <AlertDialogCancel
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                setMediaToDelete(null);
+              }}
+              className="bg-white/5 border-white/10 hover:bg-white/10 text-white/90 rounded-full px-6 font-light"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full px-6 font-light"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </WidgetContainer>
   );
 };
