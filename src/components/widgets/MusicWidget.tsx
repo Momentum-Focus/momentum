@@ -11,6 +11,7 @@ import { useTheme } from "@/context/theme-context";
 import { useMusicPlayer } from "@/context/music-player-context";
 import spotifyIcon from "@/assets/icon-spotify.png";
 import musicIcon from "@/assets/icon-music.png";
+import { FOCUS_SOUND_URLS } from "@/config/focus-sounds";
 
 interface MusicWidgetProps {
   onClose: () => void;
@@ -166,12 +167,39 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
     },
   });
 
-  // URLs dos sons de foco
+  // URLs dos sons de foco - busca do backend ou usa fallback
+  const { data: focusSoundUrlsFromAPI } = useQuery<{
+    rain: string | null;
+    ocean: string | null;
+    fireplace: string | null;
+    lofi: string | null;
+  }>({
+    queryKey: ["focusSoundUrls"],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get("/media/focus-sounds/urls");
+        return data;
+      } catch (error) {
+        console.error("Erro ao buscar URLs dos sons de foco:", error);
+        return {
+          rain: null,
+          ocean: null,
+          fireplace: null,
+          lofi: null,
+        };
+      }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  });
+
+  // Usa URLs do backend se disponíveis, senão usa fallback do arquivo de config
   const focusSoundUrls: Record<Exclude<FocusSound, null>, string> = {
-    rain: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    ocean: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-    fireplace: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-    lofi: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    rain: focusSoundUrlsFromAPI?.rain || FOCUS_SOUND_URLS.rain,
+    ocean: focusSoundUrlsFromAPI?.ocean || FOCUS_SOUND_URLS.ocean,
+    fireplace: focusSoundUrlsFromAPI?.fireplace || FOCUS_SOUND_URLS.fireplace,
+    lofi: focusSoundUrlsFromAPI?.lofi || FOCUS_SOUND_URLS.lofi,
   };
 
   // Monitorar mudanças no estado de reprodução para parar sons de foco
