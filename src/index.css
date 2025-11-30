@@ -139,3 +139,281 @@ input[type="password"]:-webkit-autofill:active {
 input.autofilled-input {
   background-color: white !important;
 }
+
+/* Theme-aware SelectItem styling */
+/* A variável --theme-color é definida inline no SelectContent */
+[data-radix-select-item][data-state="checked"],
+[data-radix-select-item]:focus {
+  background-color: color-mix(
+    in srgb,
+    var(--theme-color, #8b5cf6) 10%,
+    transparent
+  ) !important;
+  color: white !important;
+}
+
+/* Hover com cor do tema - usa a variável CSS definida inline no componente */
+/* Radix UI usa data-[highlighted] para o hover/destaque do item */
+[data-radix-select-item][data-highlighted] {
+  background-color: color-mix(
+    in srgb,
+    var(--theme-color, #8b5cf6) 20%,
+    transparent
+  ) !important;
+  color: white !important;
+}
+
+/* Selecionado (checked) com cor do tema */
+[data-radix-select-item][data-state="checked"] {
+  background-color: color-mix(
+    in srgb,
+    var(--theme-color, #8b5cf6) 20%,
+    transparent
+  ) !important;
+  color: var(--theme-color, #8b5cf6) !important;
+}
+
+/* Theme-aware ring colors */
+:root {
+  --theme-color: var(--theme-color, #8b5cf6);
+}
+
+/* ========================================
+   PREMIUM DATE PICKER - THEME CALENDAR
+   ======================================== */
+
+.theme-calendar {
+  --calendar-theme-color: var(
+    --calendar-theme-color,
+    var(--theme-color, #8b5cf6)
+  );
+}
+
+/* ===== GRID PERFEITO - 7 COLUNAS ===== */
+/* Forçar grid mesmo que react-day-picker use tabela */
+.theme-calendar .rdp-table {
+  width: 100% !important;
+  display: block !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.theme-calendar .rdp-head_row {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  gap: 4px !important;
+  margin-bottom: 8px !important;
+  width: 100% !important;
+}
+
+.theme-calendar .rdp-row {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  gap: 4px !important;
+  margin-bottom: 4px !important;
+  width: 100% !important;
+}
+
+.theme-calendar .rdp-head_cell {
+  width: 100% !important;
+  aspect-ratio: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.theme-calendar .rdp-cell {
+  width: 100% !important;
+  aspect-ratio: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+}
+
+/* ===== DIAS - BASE ===== */
+.theme-calendar .rdp-day {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  aspect-ratio: 1 !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: white !important;
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+/* ===== HOVER ===== */
+.theme-calendar
+  .rdp-day:not(.rdp-day_disabled):not([aria-selected="true"]):hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ===== DIAS PASSADOS (OUTSIDE) ===== */
+.theme-calendar .rdp-day_outside:not([aria-selected="true"]) {
+  color: rgba(255, 255, 255, 0.3) !important;
+  opacity: 0.5 !important;
+}
+
+/* ===== DIAS FUTUROS/CORRENTES ===== */
+.theme-calendar
+  .rdp-day:not(.rdp-day_outside):not(.rdp-day_disabled):not(
+    [aria-selected="true"]
+  ) {
+  color: white !important;
+}
+
+/* ===== HOJE - SUBTLE DESTAQUE ===== */
+.theme-calendar .rdp-day_today:not([aria-selected="true"]) {
+  background: transparent !important;
+  color: white !important;
+  font-weight: 600 !important;
+  position: relative !important;
+}
+
+.theme-calendar .rdp-day_today:not([aria-selected="true"])::after {
+  content: "" !important;
+  position: absolute !important;
+  bottom: 4px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 4px !important;
+  height: 4px !important;
+  border-radius: 50% !important;
+  background-color: var(--calendar-theme-color) !important;
+}
+
+/* ===== SELEÇÃO GERAL ===== */
+.theme-calendar .rdp-day[aria-selected="true"] {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+/* ===== SELEÇÃO SIMPLES (NÃO É RANGE) ===== */
+.theme-calendar
+  .rdp-day[aria-selected="true"]:not(.rdp-day_range_start):not(
+    .rdp-day_range_end
+  ):not(.rdp-day_range_middle) {
+  background-color: var(--calendar-theme-color) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 8px
+    color-mix(in srgb, var(--calendar-theme-color) 40%, transparent) !important;
+}
+
+.theme-calendar
+  .rdp-day[aria-selected="true"]:not(.rdp-day_range_start):not(
+    .rdp-day_range_end
+  ):not(.rdp-day_range_middle):hover {
+  background-color: var(--calendar-theme-color) !important;
+  opacity: 0.9 !important;
+  transform: scale(1.05) !important;
+}
+
+/* ===== RANGE START (INÍCIO DO INTERVALO) ===== */
+.theme-calendar .rdp-day_range_start[aria-selected="true"] {
+  background-color: var(--calendar-theme-color) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px
+    color-mix(in srgb, var(--calendar-theme-color) 40%, transparent) !important;
+}
+
+/* Range start quando também é middle (tem dias depois) */
+.theme-calendar
+  .rdp-day_range_start.rdp-day_range_middle[aria-selected="true"] {
+  border-radius: 50% 0 0 50% !important;
+}
+
+/* Range start quando é único (sem middle, só start e end) */
+.theme-calendar
+  .rdp-day_range_start:not(.rdp-day_range_middle)[aria-selected="true"] {
+  border-radius: 50% !important;
+}
+
+/* ===== RANGE END (FIM DO INTERVALO) ===== */
+.theme-calendar .rdp-day_range_end[aria-selected="true"] {
+  background-color: var(--calendar-theme-color) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px
+    color-mix(in srgb, var(--calendar-theme-color) 40%, transparent) !important;
+}
+
+/* Range end quando também é middle (tem dias antes) */
+.theme-calendar .rdp-day_range_end.rdp-day_range_middle[aria-selected="true"] {
+  border-radius: 0 50% 50% 0 !important;
+}
+
+/* Range end quando é único (sem middle, só start e end) */
+.theme-calendar
+  .rdp-day_range_end:not(.rdp-day_range_middle)[aria-selected="true"] {
+  border-radius: 50% !important;
+}
+
+/* ===== RANGE MIDDLE (MEIO DO INTERVALO) - MAIS ESPECÍFICO ===== */
+.theme-calendar .rdp-day_range_middle[aria-selected="true"] {
+  background-color: color-mix(
+    in srgb,
+    var(--calendar-theme-color) 20%,
+    transparent
+  ) !important;
+  color: white !important;
+  border-radius: 0 !important;
+  font-weight: 500 !important;
+}
+
+/* Garantir que range_middle não seja rounded quando está no meio */
+.theme-calendar
+  .rdp-day_range_middle:not(.rdp-day_range_start):not(
+    .rdp-day_range_end
+  )[aria-selected="true"] {
+  border-radius: 0 !important;
+}
+
+/* ===== NAVEGAÇÃO ===== */
+.theme-calendar .rdp-nav_button {
+  color: rgba(255, 255, 255, 0.5) !important;
+  transition: all 0.2s ease !important;
+}
+
+.theme-calendar .rdp-nav_button:hover {
+  color: var(--calendar-theme-color) !important;
+  background-color: color-mix(
+    in srgb,
+    var(--calendar-theme-color) 15%,
+    transparent
+  ) !important;
+}
+
+/* ===== TÍTULO ===== */
+.theme-calendar .rdp-caption_label {
+  color: white !important;
+  font-weight: 500 !important;
+  font-size: 0.9375rem !important;
+}
+
+/* ===== DESABILITADO ===== */
+.theme-calendar .rdp-day_disabled {
+  color: rgba(255, 255, 255, 0.2) !important;
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+/* ===== SELEÇÃO HOJE ===== */
+.theme-calendar .rdp-day_today[aria-selected="true"]::after {
+  display: none !important;
+}
