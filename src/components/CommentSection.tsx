@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/context/theme-context";
 import { Separator } from "@/components/ui/separator";
 
 interface Comment {
@@ -31,6 +32,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 }) => {
   const [commentText, setCommentText] = useState("");
   const { toast } = useToast();
+  const { themeColor } = useTheme();
   const queryClient = useQueryClient();
 
   const queryKey = taskId
@@ -121,13 +123,28 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           rows={3}
-          className="resize-none bg-white/5 border-white/10 rounded-xl text-white/90 placeholder:text-white/30 focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+          className="resize-none bg-white/5 border-white/10 rounded-xl text-white/90 placeholder:text-white/30 focus:ring-1 focus:outline-none transition-all"
+          onFocus={(e) => {
+            e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`;
+            e.currentTarget.style.borderColor = `${themeColor}80`;
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.boxShadow = "none";
+            e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+          }}
         />
         <Button
           type="submit"
           size="sm"
           disabled={isCreating || !commentText.trim()}
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-light"
+          className="w-full text-white rounded-xl font-light transition-colors"
+          style={{ backgroundColor: themeColor }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = `${themeColor}E6`)
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = themeColor)
+          }
         >
           <Send className="h-4 w-4 mr-2" />
           {isCreating ? "Enviando..." : "Enviar comentário"}

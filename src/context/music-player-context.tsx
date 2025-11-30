@@ -265,6 +265,17 @@ export const MusicPlayerProvider: React.FC<MusicPlayerProviderProps> = ({
         }
       } else if (service === "YOUTUBE" && youtubePlayerRef.current) {
         try {
+          // Guard clause: nunca passar ID vazio ou inválido
+          if (
+            !track.id ||
+            track.id === "" ||
+            track.id === "[]" ||
+            typeof track.id !== "string" ||
+            track.id.trim() === ""
+          ) {
+            console.error("[MusicPlayer] ID de vídeo inválido:", track.id);
+            return;
+          }
           youtubePlayerRef.current.loadVideoById?.(track.id);
           youtubePlayerRef.current.playVideo?.();
           setIsPlaying(true);
@@ -332,7 +343,12 @@ export const MusicPlayerProvider: React.FC<MusicPlayerProviderProps> = ({
           playerState === 0
         ) {
           // Vídeo terminou, recarrega e toca do início
-          if (currentTrack) {
+          if (
+            currentTrack &&
+            currentTrack.id &&
+            currentTrack.id !== "" &&
+            currentTrack.id !== "[]"
+          ) {
             youtubePlayerRef.current.loadVideoById?.(currentTrack.id);
             youtubePlayerRef.current.playVideo?.();
             setIsPlaying(true);
@@ -342,7 +358,12 @@ export const MusicPlayerProvider: React.FC<MusicPlayerProviderProps> = ({
           playerState === -1
         ) {
           // Vídeo não iniciado, recarrega se tiver track atual
-          if (currentTrack) {
+          if (
+            currentTrack &&
+            currentTrack.id &&
+            currentTrack.id !== "" &&
+            currentTrack.id !== "[]"
+          ) {
             youtubePlayerRef.current.loadVideoById?.(currentTrack.id);
             youtubePlayerRef.current.playVideo?.();
             setIsPlaying(true);

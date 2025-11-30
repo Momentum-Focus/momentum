@@ -35,6 +35,7 @@ import { api } from "@/lib/api";
 import { CommentSection } from "./CommentSection";
 import { TagManager } from "./TagManager";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/context/theme-context";
 import { cn } from "@/lib/utils";
 
 interface Task {
@@ -83,18 +84,12 @@ const formatDate = (dateString: string | undefined | null): string => {
   if (!dateString) return "Data não disponível";
   try {
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Data inválida";
+    if (isNaN(date.getTime())) return "Data não disponível";
 
-    // Use Intl.DateTimeFormat for better formatting
-    return new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
+    // Formatação em português brasileiro
+    return format(date, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
   } catch {
-    return "Data inválida";
+    return "Data não disponível";
   }
 };
 
@@ -123,6 +118,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { themeColor } = useTheme();
   const [hasChanges, setHasChanges] = useState(false);
 
   // Form state
@@ -317,7 +313,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden p-0 bg-[#0F1115]/95 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl [&>button]:hidden">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden p-0 bg-[#0F1115]/95 backdrop-blur-2xl border border-white/10 rounded-[32px] shadow-2xl [&>button]:hidden !grid grid-rows-[auto_1fr_auto] h-[90vh]">
         {/* Accessibility */}
         <DialogTitle className="sr-only">Detalhes da Tarefa</DialogTitle>
         <DialogDescription className="sr-only">
@@ -325,8 +321,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
           de tempo, ciclos Pomodoro, tags e comentários
         </DialogDescription>
 
-        {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-white/10">
+        {/* Header - Fixed */}
+        <div className="flex items-start justify-between p-6 border-b border-white/10 flex-shrink-0">
           <div className="flex-1 pr-4">
             {editingTitle ? (
               <Input
@@ -450,7 +446,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         </div>
 
         {/* Content - Scrollable */}
-        <div className="overflow-y-auto max-h-[calc(90vh-180px)] px-6 py-5 space-y-6">
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-white/60">Carregando...</p>
@@ -487,7 +483,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                       onChange={(e) => handleTotalMinutesChange(e.target.value)}
                       onBlur={handleTotalMinutesBlur}
                       placeholder="Ex: 60"
-                      className="bg-white/5 border-none text-white/90 rounded-2xl h-12 text-center text-lg focus:ring-1 focus:ring-blue-500/50 focus:border-none placeholder:text-white/30"
+                      className="bg-white/5 border-none text-white/90 rounded-2xl h-12 text-center text-lg focus:ring-1 focus:outline-none focus:border-none placeholder:text-white/30"
+                      onFocus={(e) =>
+                        (e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`)
+                      }
+                      onBlur={(e) => (e.currentTarget.style.boxShadow = "none")}
                     />
                   </div>
 
@@ -522,7 +522,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                                 onChange={(e) =>
                                   handleCyclesChange(e.target.value)
                                 }
-                                className="bg-white/5 border-none text-white/90 rounded-xl h-10 text-center focus:ring-1 focus:ring-blue-500/50 focus:border-none"
+                                className="bg-white/5 border-none text-white/90 rounded-xl h-10 text-center focus:ring-1 focus:outline-none focus:border-none"
+                                onFocus={(e) =>
+                                  (e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`)
+                                }
+                                onBlur={(e) =>
+                                  (e.currentTarget.style.boxShadow = "none")
+                                }
                               />
                             </div>
 
@@ -549,10 +555,20 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                             <motion.div
                               initial={{ opacity: 0, y: -5 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 flex items-start gap-2.5"
+                              className="rounded-xl p-3 flex items-start gap-2.5 border"
+                              style={{
+                                backgroundColor: `${themeColor}10`,
+                                borderColor: `${themeColor}30`,
+                              }}
                             >
-                              <Coffee className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                              <p className="text-xs text-blue-300 leading-relaxed">
+                              <Coffee
+                                className="h-4 w-4 mt-0.5 flex-shrink-0"
+                                style={{ color: `${themeColor}CC` }}
+                              />
+                              <p
+                                className="text-xs leading-relaxed"
+                                style={{ color: `${themeColor}DD` }}
+                              >
                                 <span className="font-semibold">
                                   Tarefa extensa detectada.
                                 </span>{" "}
@@ -591,7 +607,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   value={description}
                   onChange={(e) => handleDescriptionChange(e.target.value)}
                   placeholder="Adicione notas ou detalhes..."
-                  className="bg-white/5 border-none text-white/90 rounded-2xl min-h-[120px] p-4 resize-none focus:ring-1 focus:ring-blue-500/50 focus:border-none placeholder:text-white/30"
+                  className="bg-white/5 border-none text-white/90 rounded-2xl min-h-[120px] p-4 resize-none focus:ring-1 focus:outline-none focus:border-none placeholder:text-white/30"
+                  onFocus={(e) =>
+                    (e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`)
+                  }
+                  onBlur={(e) => (e.currentTarget.style.boxShadow = "none")}
                   rows={5}
                 />
               </div>
@@ -613,39 +633,43 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
           )}
         </div>
 
-        {/* Footer with Save Button */}
-        <AnimatePresence>
-          {hasChanges && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="border-t border-white/10 p-4 flex items-center justify-end gap-3 bg-[#0F1115]/50 backdrop-blur-sm rounded-b-[32px]"
+        {/* Footer with Save Button - Fixed */}
+        {hasChanges && (
+          <div className="border-t border-white/10 p-4 flex items-center justify-end gap-3 bg-[#0F1115]/50 backdrop-blur-sm rounded-b-[32px] flex-shrink-0">
+            <Button
+              variant="ghost"
+              onClick={resetForm}
+              className="text-white/60 hover:text-white/90 hover:bg-white/5 rounded-full"
             >
-              <Button
-                variant="ghost"
-                onClick={resetForm}
-                className="text-white/60 hover:text-white/90 hover:bg-white/5 rounded-full"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={isSaving || !title.trim()}
-                className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-6 font-medium"
-              >
-                {isSaving ? (
-                  "Salvando..."
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Salvar Alterações
-                  </>
-                )}
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSaving || !title.trim()}
+              className="text-white rounded-full px-6 font-medium"
+              style={{
+                backgroundColor: themeColor,
+              }}
+              onMouseEnter={(e) => {
+                if (!isSaving && title.trim()) {
+                  e.currentTarget.style.filter = "brightness(1.1)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = "brightness(1)";
+              }}
+            >
+              {isSaving ? (
+                "Salvando..."
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar Alterações
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

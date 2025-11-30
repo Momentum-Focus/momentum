@@ -3,16 +3,20 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 type UserProfile = {
   id: number;
   name: string;
   email: string;
+  phone: string | null;
+  cpf: string | null;
 };
 
 const Index = () => {
   const token = localStorage.getItem("authToken");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const {
     data: user,
@@ -33,6 +37,16 @@ const Index = () => {
     refetchOnMount: true, // Sempre refetch quando o componente monta
     refetchOnWindowFocus: false, // Não refetch quando a janela ganha foco
   });
+
+  // Verificar se o perfil está completo quando o usuário estiver logado
+  useEffect(() => {
+    if (token && user && !isLoadingUser) {
+      const isProfileIncomplete = !user.phone || !user.cpf;
+      if (isProfileIncomplete) {
+        navigate("/complete-profile", { replace: true });
+      }
+    }
+  }, [user, isLoadingUser, token, navigate]);
 
   // Log para debug (remover depois)
   useEffect(() => {

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useTheme } from "@/context/theme-context";
 import { cn } from "@/lib/utils";
 
 interface Tag {
@@ -43,6 +44,7 @@ export const TagManager: React.FC<TagManagerProps> = ({
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
   const { toast } = useToast();
+  const { themeColor } = useTheme();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -335,7 +337,14 @@ export const TagManager: React.FC<TagManagerProps> = ({
                 </div>
                 <Button
                   size="sm"
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-full"
+                  className="w-full text-white rounded-full transition-colors"
+                  style={{ backgroundColor: themeColor }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.backgroundColor = `${themeColor}E6`)
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.backgroundColor = themeColor)
+                  }
                   onClick={() => setIsCreating(true)}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -361,7 +370,11 @@ export const TagManager: React.FC<TagManagerProps> = ({
                         setTagName("");
                       }
                     }}
-                    className="bg-white/5 border-white/10 text-white/90 rounded-xl focus:ring-2 focus:ring-blue-500/50"
+                    className="bg-white/5 border-white/10 text-white/90 rounded-xl focus:ring-2 focus:outline-none"
+                    onFocus={(e) =>
+                      (e.currentTarget.style.boxShadow = `0 0 0 2px ${themeColor}80`)
+                    }
+                    onBlur={(e) => (e.currentTarget.style.boxShadow = "none")}
                     autoFocus
                   />
                 </div>
@@ -388,7 +401,14 @@ export const TagManager: React.FC<TagManagerProps> = ({
                 <div className="flex gap-2">
                   <Button
                     size="sm"
-                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full"
+                    className="flex-1 text-white rounded-full transition-colors"
+                    style={{ backgroundColor: themeColor }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = `${themeColor}E6`)
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = themeColor)
+                    }
                     onClick={handleCreateAndAddTag}
                     disabled={!tagName.trim()}
                   >

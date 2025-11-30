@@ -1,4 +1,5 @@
 import { useSubscription } from "@/context/subscription-context";
+import { useTheme } from "@/context/theme-context";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -21,6 +22,7 @@ type PlanResponse = {
 
 const Plans = () => {
   const { planName, refresh } = useSubscription();
+  const { themeColor } = useTheme();
   const { toast } = useToast();
   const navigate = useNavigate();
   const token = localStorage.getItem("authToken");
@@ -200,15 +202,28 @@ const Plans = () => {
                 <div
                   key={plan.id}
                   className={`zen-glass border rounded-3xl p-8 flex flex-col gap-6 relative transition-all ${
-                    isFlow
-                      ? "border-blue-500/80 shadow-[0_20px_60px_rgba(59,130,246,0.4)] ring-2 ring-blue-500/30"
-                      : "border-white/10"
+                    isFlow ? "ring-2" : "border-white/10"
                   }`}
+                  style={
+                    isFlow
+                      ? {
+                          borderColor: `${themeColor}80`,
+                          boxShadow: `0 20px 60px ${themeColor}40`,
+                          ringColor: `${themeColor}30`,
+                        }
+                      : {}
+                  }
                 >
                   {/* Badge destacado - apenas FLOW */}
                   {isFlow && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
-                      <div className="bg-blue-500 text-white text-xs px-4 py-1.5 rounded-full font-light tracking-widest uppercase shadow-lg shadow-blue-500/50">
+                      <div
+                        className="text-white text-xs px-4 py-1.5 rounded-full font-light tracking-widest uppercase shadow-lg"
+                        style={{
+                          backgroundColor: themeColor,
+                          boxShadow: `0 10px 20px ${themeColor}50`,
+                        }}
+                      >
                         Popular
                       </div>
                     </div>
@@ -245,7 +260,8 @@ const Plans = () => {
                       {planFeatures.map((feature, idx) => (
                         <li key={idx} className="flex items-start gap-3">
                           <Check
-                            className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5"
+                            className="h-5 w-5 flex-shrink-0 mt-0.5"
+                            style={{ color: themeColor }}
                             strokeWidth={1.5}
                           />
                           <span className="font-light">{feature}</span>
@@ -266,9 +282,35 @@ const Plans = () => {
                       isCurrent || isVibesAndLoggedIn
                         ? "bg-white/10 text-white/60 cursor-not-allowed"
                         : isFlow
-                        ? "bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/30"
+                        ? "text-white shadow-lg"
                         : "bg-white/10 text-white hover:bg-white/20"
                     }`}
+                    style={
+                      isFlow && !isCurrent && !isVibesAndLoggedIn
+                        ? {
+                            backgroundColor: themeColor,
+                            boxShadow: `0 10px 20px ${themeColor}30`,
+                          }
+                        : {}
+                    }
+                    onMouseEnter={(e) => {
+                      if (isFlow && !isCurrent && !isVibesAndLoggedIn) {
+                        const color = themeColor;
+                        const r = parseInt(color.slice(1, 3), 16);
+                        const g = parseInt(color.slice(3, 5), 16);
+                        const b = parseInt(color.slice(5, 7), 16);
+                        const darker = `rgb(${Math.max(0, r - 20)}, ${Math.max(
+                          0,
+                          g - 20
+                        )}, ${Math.max(0, b - 20)})`;
+                        e.currentTarget.style.backgroundColor = darker;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (isFlow && !isCurrent && !isVibesAndLoggedIn) {
+                        e.currentTarget.style.backgroundColor = themeColor;
+                      }
+                    }}
                   >
                     {isVibesAndLoggedIn
                       ? "Já Adquirido"

@@ -7,6 +7,7 @@ import { MediaErrorBoundary } from "./MediaErrorBoundary";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/context/theme-context";
 import { useMusicPlayer } from "@/context/music-player-context";
 import spotifyIcon from "@/assets/icon-spotify.png";
 import musicIcon from "@/assets/icon-music.png";
@@ -45,6 +46,7 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
   const focusSoundAudioRef = useRef<HTMLAudioElement | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { themeColor } = useTheme();
 
   const { data: spotifyStatus } = useQuery<{
     isConnected: boolean;
@@ -626,9 +628,18 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
               onClick={() => handleFocusSoundPlay("rain")}
               className={`px-4 py-2 rounded-full text-xs transition-all duration-200 flex items-center gap-2 font-light ${
                 activeFocusSound === "rain"
-                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  ? "border text-white/90"
                   : "bg-white/5 hover:bg-white/10 border-0 text-white/90"
               }`}
+              style={
+                activeFocusSound === "rain"
+                  ? {
+                      backgroundColor: `${themeColor}20`,
+                      borderColor: `${themeColor}50`,
+                      color: `${themeColor}CC`,
+                    }
+                  : undefined
+              }
             >
               <Cloud className="h-4 w-4" strokeWidth={1.5} />
               Chuva
@@ -637,9 +648,18 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
               onClick={() => handleFocusSoundPlay("ocean")}
               className={`px-4 py-2 rounded-full text-xs transition-all duration-200 flex items-center gap-2 font-light ${
                 activeFocusSound === "ocean"
-                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  ? "border text-white/90"
                   : "bg-white/5 hover:bg-white/10 border-0 text-white/90"
               }`}
+              style={
+                activeFocusSound === "ocean"
+                  ? {
+                      backgroundColor: `${themeColor}20`,
+                      borderColor: `${themeColor}50`,
+                      color: `${themeColor}CC`,
+                    }
+                  : undefined
+              }
             >
               <Waves className="h-4 w-4" strokeWidth={1.5} />
               Oceano

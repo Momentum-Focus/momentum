@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Play, Pause, RotateCcw, Settings } from "lucide-react";
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Settings,
+  Clock,
+  ArrowLeft,
+} from "lucide-react";
 import { WidgetContainer } from "./WidgetContainer";
 import { Task, PomodoroMode } from "../FocusApp";
 import { api } from "@/lib/api";
@@ -7,6 +14,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useFocusSettings } from "@/hooks/use-focus-settings";
+import { useFeatureCheck } from "@/hooks/use-feature-check";
+import { useTheme } from "@/context/theme-context";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { AuthWall } from "../AuthWall";
 import {
   Dialog,
   DialogContent,
@@ -84,6 +97,7 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
     saveSettings,
     saving: isSavingSettings,
   } = useFocusSettings();
+  const { themeColor } = useTheme();
 
   // State management with localStorage persistence
   const [timerState, setTimerState] = useState<TimerState>(() => {
@@ -124,6 +138,9 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
 
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const { requireFeature, hasFeature } = useFeatureCheck();
+  const hasSessionHistoryFeature = hasFeature("SESSION_HISTORY");
 
   // Input states - allow empty strings
   const [tempFocus, setTempFocus] = useState<string>("");
@@ -264,13 +281,30 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
       // Play sound
       playTimerSound();
 
-      // End session if active
-      if (activeSessionId) {
-        const duration = Math.floor(
-          (getTimerDuration(timerState.mode) - timerState.timeLeft) / 60
-        );
-        endSession({ id: activeSessionId, durationMinutes: duration });
+      // Save completed session
+      // When timer completes, duration is the full timer duration
+      const fullDuration = getTimerDuration(timerState.mode);
+      const durationMinutes = Math.floor(fullDuration / 60);
+
+      // Only save if duration is at least 1 minute
+      if (durationMinutes >= 1) {
+        const taskId =
+          activeTask &&
+          timerState.mode === "focus" &&
+          !isNaN(parseInt(activeTask.id))
+            ? parseInt(activeTask.id)
+            : undefined;
+
+        saveSession({
+          durationMinutes,
+          type: mapModeToSessionType(timerState.mode),
+          completed: true,
+          taskId,
+        });
       }
+
+      // Clean up active session ID
+      setActiveSessionId(null);
 
       if (timerState.mode === "focus") {
         const newCycleCount = timerState.cycleCount + 1;
@@ -381,6 +415,34 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
     },
   });
 
+  // New mutation for saving session with DailyLog update
+  const { mutate: saveSession } = useMutation<
+    any,
+    Error,
+    {
+      durationMinutes: number;
+      type: "FOCUS" | "SHORT_BREAK" | "LONG_BREAK";
+      completed: boolean;
+      taskId?: number;
+    }
+  >({
+    mutationFn: (data) =>
+      api.post("/timer/session", data).then((res) => res.data),
+    onSuccess: () => {
+      setActiveSessionId(null);
+      queryClient.invalidateQueries({ queryKey: ["dailyLogs"] });
+      queryClient.invalidateQueries({ queryKey: ["study-sessions-history"] });
+      queryClient.invalidateQueries({ queryKey: ["report"] });
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao salvar sessão",
+        description: "Não foi possível salvar a sessão.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handlePlayPause = () => {
     if (timerState.isRunning) {
       // Pausar: apenas pausar o timer, mantendo o timeLeft atual
@@ -428,12 +490,31 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
   };
 
   const handleReset = () => {
-    if (timerState.isRunning && activeSessionId) {
-      const duration = Math.floor(
-        (getTimerDuration(timerState.mode) - timerState.timeLeft) / 60
+    // Calculate elapsed time if timer was running
+    if (timerState.isRunning && timerState.startTime) {
+      const elapsedSeconds = Math.floor(
+        (Date.now() - timerState.startTime) / 1000
       );
-      endSession({ id: activeSessionId, durationMinutes: duration });
+      const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+      // Save interrupted session if elapsed time > 1 minute
+      if (elapsedMinutes >= 1) {
+        const taskId =
+          activeTask &&
+          timerState.mode === "focus" &&
+          !isNaN(parseInt(activeTask.id))
+            ? parseInt(activeTask.id)
+            : undefined;
+
+        saveSession({
+          durationMinutes: elapsedMinutes,
+          type: mapModeToSessionType(timerState.mode),
+          completed: false,
+          taskId,
+        });
+      }
     }
+
     const duration = getTimerDuration(timerState.mode);
     timerWasStartedRef.current = false; // Reset flag quando reseta
     setTimerState((prev) => ({
@@ -446,12 +527,31 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
   };
 
   const handleModeChange = (newMode: PomodoroMode) => {
-    if (timerState.isRunning && activeSessionId) {
-      const duration = Math.floor(
-        (getTimerDuration(timerState.mode) - timerState.timeLeft) / 60
+    // Save interrupted session if timer was running
+    if (timerState.isRunning && timerState.startTime) {
+      const elapsedSeconds = Math.floor(
+        (Date.now() - timerState.startTime) / 1000
       );
-      endSession({ id: activeSessionId, durationMinutes: duration });
+      const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+      // Save interrupted session if elapsed time > 1 minute
+      if (elapsedMinutes >= 1) {
+        const taskId =
+          activeTask &&
+          timerState.mode === "focus" &&
+          !isNaN(parseInt(activeTask.id))
+            ? parseInt(activeTask.id)
+            : undefined;
+
+        saveSession({
+          durationMinutes: elapsedMinutes,
+          type: mapModeToSessionType(timerState.mode),
+          completed: false,
+          taskId,
+        });
+      }
     }
+
     const duration = getTimerDuration(newMode);
     setTimerState((prev) => ({
       ...prev,
@@ -472,9 +572,19 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
   };
 
   const getModeColor = () => {
-    if (timerState.mode === "focus") return "text-blue-400";
+    if (timerState.mode === "focus") {
+      // Use theme color for focus mode
+      return "";
+    }
     if (timerState.mode === "short-break") return "text-green-400";
     return "text-yellow-400";
+  };
+
+  const getModeColorStyle = () => {
+    if (timerState.mode === "focus") {
+      return { color: themeColor };
+    }
+    return {};
   };
 
   // Input validation - convert to number on blur or save
@@ -544,6 +654,50 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
       ? `Ciclo ${timerState.currentCycle} de ${activeTask.cycles}`
       : null;
 
+  // Fetch session history
+  const { data: sessionHistory = [], isLoading: isLoadingHistory } = useQuery({
+    queryKey: ["study-sessions-history"],
+    queryFn: () => api.get("/study-sessions/history").then((res) => res.data),
+    enabled: showHistory && hasSessionHistoryFeature,
+  });
+
+  const getSessionTypeIcon = (type: string) => {
+    switch (type) {
+      case "FOCUS":
+        return "🎯";
+      case "SHORT_BREAK":
+        return "☕";
+      case "LONG_BREAK":
+        return "🌴";
+      default:
+        return "⏱️";
+    }
+  };
+
+  const getSessionTypeLabel = (type: string) => {
+    switch (type) {
+      case "FOCUS":
+        return "Foco";
+      case "SHORT_BREAK":
+        return "Pausa Curta";
+      case "LONG_BREAK":
+        return "Pausa Longa";
+      default:
+        return type;
+    }
+  };
+
+  const formatSessionDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return format(date, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", {
+        locale: ptBR,
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   return (
     <>
       <WidgetContainer
@@ -555,16 +709,38 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
         onDragEnd={onDragEnd}
         widgetId={widgetId}
         headerActions={
-          <button
-            onClick={() => setShowSettings(true)}
-            className="h-6 w-6 p-0 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center group"
-            title="Configurações"
-          >
-            <Settings
-              className="h-3.5 w-3.5 text-white/50 group-hover:text-white/90 transition-colors"
-              strokeWidth={1.5}
-            />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (!hasSessionHistoryFeature) {
+                  requireFeature(
+                    "SESSION_HISTORY",
+                    "Histórico de Sessões",
+                    "Flow"
+                  );
+                  return;
+                }
+                setShowHistory(true);
+              }}
+              className="h-6 w-6 p-0 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center group"
+              title="Histórico de Sessões"
+            >
+              <Clock
+                className="h-3.5 w-3.5 text-white/50 group-hover:text-white/90 transition-colors"
+                strokeWidth={1.5}
+              />
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="h-6 w-6 p-0 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center group"
+              title="Configurações"
+            >
+              <Settings
+                className="h-3.5 w-3.5 text-white/50 group-hover:text-white/90 transition-colors"
+                strokeWidth={1.5}
+              />
+            </button>
+          </div>
         }
       >
         <div className="p-8 relative">
@@ -586,6 +762,7 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
             {/* Timer Display */}
             <motion.div
               className={`text-7xl font-thin mb-8 ${getModeColor()}`}
+              style={getModeColorStyle()}
               animate={timerState.isRunning ? { scale: [1, 1.02, 1] } : {}}
               transition={{ duration: 2, repeat: Infinity }}
             >
@@ -598,9 +775,14 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
                 onClick={() => handleModeChange("focus")}
                 className={`flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                   timerState.mode === "focus"
-                    ? "bg-blue-500 text-white"
+                    ? "text-white"
                     : "text-white/50 hover:text-white/80"
                 }`}
+                style={
+                  timerState.mode === "focus"
+                    ? { backgroundColor: themeColor }
+                    : {}
+                }
               >
                 Foco
               </button>
@@ -630,7 +812,34 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
             <div className="flex gap-3 justify-center">
               <motion.button
                 onClick={handlePlayPause}
-                className="h-16 w-16 rounded-full bg-blue-500 hover:bg-blue-600 transition-colors flex items-center justify-center text-white shadow-lg shadow-blue-500/30"
+                className="h-16 w-16 rounded-full transition-colors flex items-center justify-center text-white shadow-lg"
+                style={{
+                  backgroundColor:
+                    timerState.mode === "focus"
+                      ? themeColor
+                      : timerState.mode === "short-break"
+                      ? "#10B981"
+                      : "#F59E0B",
+                  boxShadow:
+                    timerState.mode === "focus"
+                      ? `${themeColor}30 0px 0px 20px`
+                      : timerState.mode === "short-break"
+                      ? "#10B98130 0px 0px 20px"
+                      : "#F59E0B30 0px 0px 20px",
+                }}
+                onMouseEnter={(e) => {
+                  if (timerState.mode === "focus") {
+                    const hoverColor = themeColor;
+                    e.currentTarget.style.backgroundColor = hoverColor;
+                    e.currentTarget.style.filter = "brightness(1.1)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (timerState.mode === "focus") {
+                    e.currentTarget.style.backgroundColor = themeColor;
+                    e.currentTarget.style.filter = "brightness(1)";
+                  }
+                }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -662,6 +871,81 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
         </div>
       </WidgetContainer>
 
+      {/* History Modal */}
+      <Dialog open={showHistory} onOpenChange={setShowHistory}>
+        <DialogContent className="zen-glass border-white/10 rounded-3xl max-w-2xl max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setShowHistory(false)}
+                className="h-8 w-8 p-0 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-white/50 hover:text-white/90 -ml-2"
+                title="Voltar"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <DialogTitle className="text-white/90 font-light flex-1 text-center">
+                Histórico de Sessões
+              </DialogTitle>
+              <div className="w-8" /> {/* Spacer para centralizar o título */}
+            </div>
+            <DialogDescription className="sr-only">
+              Lista de sessões de estudo e foco anteriores, incluindo data,
+              duração, tipo de sessão e tarefa associada, se houver.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto pr-2 space-y-3 mt-4">
+            {isLoadingHistory ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-8 w-8 border-2 border-white/20 border-t-blue-500 rounded-full animate-spin" />
+              </div>
+            ) : sessionHistory.length === 0 ? (
+              <div className="text-center py-12">
+                <Clock className="h-12 w-12 text-white/20 mx-auto mb-4" />
+                <p className="text-white/60 font-light mb-2">
+                  Nenhuma sessão registrada ainda
+                </p>
+                <p className="text-white/40 text-sm font-light">
+                  Complete sessões de foco para ver seu histórico aqui
+                </p>
+              </div>
+            ) : (
+              sessionHistory.map((session: any) => (
+                <div
+                  key={session.id}
+                  className="zen-glass rounded-xl p-4 border border-white/10 hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-2xl">
+                          {getSessionTypeIcon(session.typeSession)}
+                        </span>
+                        <span className="text-sm font-medium text-white/90">
+                          {getSessionTypeLabel(session.typeSession)}
+                        </span>
+                        {session.durationMinutes && (
+                          <span className="text-xs text-white/50 font-light">
+                            • {session.durationMinutes} min
+                          </span>
+                        )}
+                      </div>
+                      {session.taskTitle && (
+                        <p className="text-sm text-white/70 font-light mb-2">
+                          📋 {session.taskTitle}
+                        </p>
+                      )}
+                      <p className="text-xs text-white/40 font-light">
+                        {formatSessionDate(session.startedAt)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Settings Modal */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="zen-glass border-white/10 rounded-3xl">
@@ -686,7 +970,11 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
                 value={tempFocus}
                 onChange={(e) => setTempFocus(e.target.value)}
                 onBlur={handleFocusBlur}
-                className="bg-white/5 border-0 rounded-full h-12 text-white/90 placeholder:text-white/30 focus:ring-1 focus:ring-blue-500/50"
+                className="bg-white/5 border-0 rounded-full h-12 text-white/90 placeholder:text-white/30 focus:ring-1 focus:outline-none"
+                onFocus={(e) =>
+                  (e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`)
+                }
+                onBlur={(e) => (e.currentTarget.style.boxShadow = "none")}
               />
             </div>
             <div className="space-y-2">
@@ -701,7 +989,11 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
                 value={tempShortBreak}
                 onChange={(e) => setTempShortBreak(e.target.value)}
                 onBlur={handleShortBreakBlur}
-                className="bg-white/5 border-0 rounded-full h-12 text-white/90 placeholder:text-white/30 focus:ring-1 focus:ring-blue-500/50"
+                className="bg-white/5 border-0 rounded-full h-12 text-white/90 placeholder:text-white/30 focus:ring-1 focus:outline-none"
+                onFocus={(e) =>
+                  (e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`)
+                }
+                onBlur={(e) => (e.currentTarget.style.boxShadow = "none")}
               />
             </div>
             <div className="space-y-2">
@@ -716,14 +1008,25 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({
                 value={tempLongBreak}
                 onChange={(e) => setTempLongBreak(e.target.value)}
                 onBlur={handleLongBreakBlur}
-                className="bg-white/5 border-0 rounded-full h-12 text-white/90 placeholder:text-white/30 focus:ring-1 focus:ring-blue-500/50"
+                className="bg-white/5 border-0 rounded-full h-12 text-white/90 placeholder:text-white/30 focus:ring-1 focus:outline-none"
+                onFocus={(e) =>
+                  (e.currentTarget.style.boxShadow = `0 0 0 1px ${themeColor}80`)
+                }
+                onBlur={(e) => (e.currentTarget.style.boxShadow = "none")}
               />
             </div>
             <div className="flex gap-3 pt-4">
               <Button
                 onClick={handleSaveSettings}
                 disabled={isSavingSettings}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full font-light"
+                className="flex-1 text-white rounded-full font-light transition-colors"
+                style={{ backgroundColor: themeColor }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor = `${themeColor}E6`)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = themeColor)
+                }
               >
                 {isSavingSettings ? "Salvando..." : "Salvar"}
               </Button>

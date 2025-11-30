@@ -4,10 +4,14 @@ import { Dock } from "./Dock";
 import { TimerWidget } from "./widgets/TimerWidget";
 import { MusicWidget } from "./widgets/MusicWidget";
 import { TasksWidget } from "./widgets/TasksWidget";
+import { ProjectsWidget } from "./widgets/ProjectsWidget";
+import { ReportsWidget } from "./widgets/ReportsWidget";
 import { BackgroundWidget } from "./widgets/BackgroundWidget";
+import { SupportWidget } from "./widgets/SupportWidget";
 import { ProfileModal } from "./ProfileModal";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useWindowBoundaries } from "@/hooks/useWindowBoundaries";
 
 export interface Task {
   id: string;
@@ -31,6 +35,8 @@ const FocusApp: React.FC<FocusAppProps> = ({
   isGuestMode = false,
   user: userProp,
 }) => {
+  // Window boundaries enforcement
+  useWindowBoundaries();
   // Persistência de widgets abertos no localStorage
   const loadWidgetState = () => {
     if (typeof window === "undefined") {
@@ -38,8 +44,11 @@ const FocusApp: React.FC<FocusAppProps> = ({
         showPomodoro: false,
         showMusic: false,
         showTasks: false,
+        showProjects: false,
+        showReports: false,
         showBackground: false,
         showProfile: false,
+        showSupport: false,
       };
     }
     const saved = localStorage.getItem("momentum-widgets-state");
@@ -51,6 +60,8 @@ const FocusApp: React.FC<FocusAppProps> = ({
           showPomodoro: false,
           showMusic: false,
           showTasks: false,
+          showProjects: false,
+          showReports: false,
           showBackground: false,
           showProfile: false,
         };
@@ -60,6 +71,8 @@ const FocusApp: React.FC<FocusAppProps> = ({
       showPomodoro: false,
       showMusic: false,
       showTasks: false,
+      showProjects: false,
+      showReports: false,
       showBackground: false,
       showProfile: false,
     };
@@ -69,8 +82,11 @@ const FocusApp: React.FC<FocusAppProps> = ({
     showPomodoro: boolean;
     showMusic: boolean;
     showTasks: boolean;
+    showProjects: boolean;
+    showReports: boolean;
     showBackground: boolean;
     showProfile: boolean;
+    showSupport: boolean;
   }) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("momentum-widgets-state", JSON.stringify(state));
@@ -81,10 +97,13 @@ const FocusApp: React.FC<FocusAppProps> = ({
   const [showPomodoro, setShowPomodoro] = useState(initialState.showPomodoro);
   const [showMusic, setShowMusic] = useState(initialState.showMusic);
   const [showTasks, setShowTasks] = useState(initialState.showTasks);
+  const [showProjects, setShowProjects] = useState(initialState.showProjects);
+  const [showReports, setShowReports] = useState(initialState.showReports);
   const [showBackground, setShowBackground] = useState(
     initialState.showBackground
   );
   const [showProfile, setShowProfile] = useState(initialState.showProfile);
+  const [showSupport, setShowSupport] = useState(initialState.showSupport);
   // Load background from localStorage
   const loadBackground = () => {
     if (typeof window !== "undefined") {
@@ -117,10 +136,21 @@ const FocusApp: React.FC<FocusAppProps> = ({
       showPomodoro,
       showMusic,
       showTasks,
+      showProjects,
+      showReports,
       showBackground,
       showProfile,
+      showSupport,
     });
-  }, [showPomodoro, showMusic, showTasks, showBackground, showProfile]);
+  }, [
+    showPomodoro,
+    showMusic,
+    showTasks,
+    showProjects,
+    showReports,
+    showBackground,
+    showProfile,
+  ]);
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
@@ -176,7 +206,14 @@ const FocusApp: React.FC<FocusAppProps> = ({
   };
 
   const getWidgetPosition = (
-    widgetId: "pomodoro" | "music" | "tasks" | "background",
+    widgetId:
+      | "pomodoro"
+      | "music"
+      | "tasks"
+      | "projects"
+      | "reports"
+      | "background"
+      | "support",
     excludeWidgetId?: boolean,
     forceRecalculate?: boolean
   ): { x: number; y: number } => {
@@ -195,10 +232,28 @@ const FocusApp: React.FC<FocusAppProps> = ({
         showTasks && widgetId !== "tasks"
           ? { id: "tasks", pos: widgetPositions["tasks"] || DEFAULT_POSITION }
           : null,
+        showProjects && widgetId !== "projects"
+          ? {
+              id: "projects",
+              pos: widgetPositions["projects"] || DEFAULT_POSITION,
+            }
+          : null,
+        showReports && widgetId !== "reports"
+          ? {
+              id: "reports",
+              pos: widgetPositions["reports"] || DEFAULT_POSITION,
+            }
+          : null,
         showBackground && widgetId !== "background"
           ? {
               id: "background",
               pos: widgetPositions["background"] || DEFAULT_POSITION,
+            }
+          : null,
+        showSupport && widgetId !== "support"
+          ? {
+              id: "support",
+              pos: widgetPositions["support"] || DEFAULT_POSITION,
             }
           : null,
       ].filter(Boolean) as { id: string; pos: { x: number; y: number } }[];
@@ -238,10 +293,28 @@ const FocusApp: React.FC<FocusAppProps> = ({
         pos: widgetPositions["tasks"] || DEFAULT_POSITION,
       });
     }
+    if (showProjects && !shouldExclude("projects")) {
+      openWidgetsWithPositions.push({
+        id: "projects",
+        pos: widgetPositions["projects"] || DEFAULT_POSITION,
+      });
+    }
+    if (showReports && !shouldExclude("reports")) {
+      openWidgetsWithPositions.push({
+        id: "reports",
+        pos: widgetPositions["reports"] || DEFAULT_POSITION,
+      });
+    }
     if (showBackground && !shouldExclude("background")) {
       openWidgetsWithPositions.push({
         id: "background",
         pos: widgetPositions["background"] || DEFAULT_POSITION,
+      });
+    }
+    if (showSupport && !shouldExclude("support")) {
+      openWidgetsWithPositions.push({
+        id: "support",
+        pos: widgetPositions["support"] || DEFAULT_POSITION,
       });
     }
 
@@ -349,7 +422,14 @@ const FocusApp: React.FC<FocusAppProps> = ({
   };
 
   const updateWidgetPosition = (
-    widgetId: "pomodoro" | "music" | "tasks" | "background",
+    widgetId:
+      | "pomodoro"
+      | "music"
+      | "tasks"
+      | "projects"
+      | "reports"
+      | "background"
+      | "support",
     position: { x: number; y: number }
   ) => {
     setWidgetPositions((prev) => ({
@@ -359,7 +439,14 @@ const FocusApp: React.FC<FocusAppProps> = ({
   };
 
   const handleDragEnd = (
-    draggedWidgetId: "pomodoro" | "music" | "tasks" | "background",
+    draggedWidgetId:
+      | "pomodoro"
+      | "music"
+      | "tasks"
+      | "projects"
+      | "reports"
+      | "background"
+      | "support",
     finalPosition: { x: number; y: number }
   ) => {
     updateWidgetPosition(draggedWidgetId, finalPosition);
@@ -377,7 +464,13 @@ const FocusApp: React.FC<FocusAppProps> = ({
       };
 
       const widgetsToCheck: Array<{
-        id: "pomodoro" | "music" | "tasks" | "background";
+        id:
+          | "pomodoro"
+          | "music"
+          | "tasks"
+          | "projects"
+          | "reports"
+          | "background";
       }> = [];
 
       if (showPomodoro && draggedWidgetId !== "pomodoro") {
@@ -388,6 +481,12 @@ const FocusApp: React.FC<FocusAppProps> = ({
       }
       if (showTasks && draggedWidgetId !== "tasks") {
         widgetsToCheck.push({ id: "tasks" });
+      }
+      if (showProjects && draggedWidgetId !== "projects") {
+        widgetsToCheck.push({ id: "projects" });
+      }
+      if (showReports && draggedWidgetId !== "reports") {
+        widgetsToCheck.push({ id: "reports" });
       }
       if (showBackground && draggedWidgetId !== "background") {
         widgetsToCheck.push({ id: "background" });
@@ -429,7 +528,14 @@ const FocusApp: React.FC<FocusAppProps> = ({
   };
 
   const clearWidgetPosition = (
-    widgetId: "pomodoro" | "music" | "tasks" | "background"
+    widgetId:
+      | "pomodoro"
+      | "music"
+      | "tasks"
+      | "projects"
+      | "reports"
+      | "background"
+      | "support"
   ) => {
     setWidgetPositions((prev) => {
       const newPositions = { ...prev };
@@ -451,7 +557,15 @@ const FocusApp: React.FC<FocusAppProps> = ({
   };
 
   const handleOpenWidget = (
-    widgetId: "pomodoro" | "music" | "tasks" | "background" | "profile"
+    widgetId:
+      | "pomodoro"
+      | "music"
+      | "tasks"
+      | "projects"
+      | "reports"
+      | "background"
+      | "support"
+      | "profile"
   ) => {
     if (widgetId === "profile") {
       // Toggle para profile
@@ -465,7 +579,14 @@ const FocusApp: React.FC<FocusAppProps> = ({
       return;
     }
 
-    const widgetKey = widgetId as "pomodoro" | "music" | "tasks" | "background";
+    const widgetKey = widgetId as
+      | "pomodoro"
+      | "music"
+      | "tasks"
+      | "projects"
+      | "reports"
+      | "background"
+      | "support";
 
     // Toggle: se já está aberto, fecha
     if (widgetId === "pomodoro" && showPomodoro) {
@@ -483,8 +604,23 @@ const FocusApp: React.FC<FocusAppProps> = ({
       setActiveDockItem(null);
       return;
     }
+    if (widgetId === "projects" && showProjects) {
+      setShowProjects(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "reports" && showReports) {
+      setShowReports(false);
+      setActiveDockItem(null);
+      return;
+    }
     if (widgetId === "background" && showBackground) {
       setShowBackground(false);
+      setActiveDockItem(null);
+      return;
+    }
+    if (widgetId === "support" && showSupport) {
+      setShowSupport(false);
       setActiveDockItem(null);
       return;
     }
@@ -516,6 +652,22 @@ const FocusApp: React.FC<FocusAppProps> = ({
       }));
       setShowTasks(true);
     }
+    if (widgetId === "projects") {
+      const initialPos = getWidgetPosition("projects", true, true);
+      setWidgetPositions((prev) => ({
+        ...prev,
+        projects: initialPos,
+      }));
+      setShowProjects(true);
+    }
+    if (widgetId === "reports") {
+      const initialPos = getWidgetPosition("reports", true, true);
+      setWidgetPositions((prev) => ({
+        ...prev,
+        reports: initialPos,
+      }));
+      setShowReports(true);
+    }
     if (widgetId === "background") {
       const initialPos = getWidgetPosition("background", true, true);
       setWidgetPositions((prev) => ({
@@ -523,6 +675,14 @@ const FocusApp: React.FC<FocusAppProps> = ({
         background: initialPos,
       }));
       setShowBackground(true);
+    }
+    if (widgetId === "support") {
+      const initialPos = getWidgetPosition("support", true, true);
+      setWidgetPositions((prev) => ({
+        ...prev,
+        support: initialPos,
+      }));
+      setShowSupport(true);
     }
   };
 
@@ -591,6 +751,42 @@ const FocusApp: React.FC<FocusAppProps> = ({
         />
       )}
 
+      {showProjects && (
+        <ProjectsWidget
+          onClose={() => {
+            setShowProjects(false);
+            clearWidgetPosition("projects");
+            setActiveDockItem(
+              activeDockItem === "projects" ? null : activeDockItem
+            );
+          }}
+          defaultPosition={
+            widgetPositions["projects"] || getWidgetPosition("projects")
+          }
+          onPositionChange={(pos) => updateWidgetPosition("projects", pos)}
+          onDragEnd={(pos) => handleDragEnd("projects", pos)}
+          widgetId="projects"
+        />
+      )}
+
+      {showReports && (
+        <ReportsWidget
+          onClose={() => {
+            setShowReports(false);
+            clearWidgetPosition("reports");
+            setActiveDockItem(
+              activeDockItem === "reports" ? null : activeDockItem
+            );
+          }}
+          defaultPosition={
+            widgetPositions["reports"] || getWidgetPosition("reports")
+          }
+          onPositionChange={(pos) => updateWidgetPosition("reports", pos)}
+          onDragEnd={(pos) => handleDragEnd("reports", pos)}
+          widgetId="reports"
+        />
+      )}
+
       {showBackground && (
         <BackgroundWidget
           onClose={() => {
@@ -611,6 +807,24 @@ const FocusApp: React.FC<FocusAppProps> = ({
         />
       )}
 
+      {showSupport && (
+        <SupportWidget
+          onClose={() => {
+            setShowSupport(false);
+            clearWidgetPosition("support");
+            setActiveDockItem(
+              activeDockItem === "support" ? null : activeDockItem
+            );
+          }}
+          defaultPosition={
+            widgetPositions["support"] || getWidgetPosition("support")
+          }
+          onPositionChange={(pos) => updateWidgetPosition("support", pos)}
+          onDragEnd={(pos) => handleDragEnd("support", pos)}
+          widgetId="support"
+        />
+      )}
+
       {/* Dock */}
       <Dock
         activeItem={
@@ -620,16 +834,25 @@ const FocusApp: React.FC<FocusAppProps> = ({
             ? "music"
             : showTasks
             ? "tasks"
+            : showProjects
+            ? "projects"
+            : showReports
+            ? "reports"
             : showBackground
             ? "background"
             : showProfile
             ? "profile"
+            : showSupport
+            ? "support"
             : undefined
         }
         onTimerClick={() => handleOpenWidget("pomodoro")}
         onMusicClick={() => handleOpenWidget("music")}
         onTasksClick={() => handleOpenWidget("tasks")}
+        onProjectsClick={() => handleOpenWidget("projects")}
+        onReportsClick={() => handleOpenWidget("reports")}
         onBackgroundClick={() => handleOpenWidget("background")}
+        onSupportClick={() => handleOpenWidget("support")}
         onProfileClick={() => {
           if (isGuestMode) {
             // Em modo visitante, redirecionar para login

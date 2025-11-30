@@ -1,11 +1,14 @@
 import React, { useRef, useState } from "react";
-import { Upload, Check } from "lucide-react";
+import { Upload, Check, Palette } from "lucide-react";
 import { WidgetContainer } from "./WidgetContainer";
 import { motion } from "framer-motion";
 import { useFeatureCheck } from "@/hooks/use-feature-check";
+import { useTheme } from "@/context/theme-context";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { AuthWall } from "@/components/AuthWall";
+import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface BackgroundWidgetProps {
   onClose: () => void;
@@ -62,9 +65,20 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { requireFeature, hasFeature, showAuthWall, setShowAuthWall } =
     useFeatureCheck();
+  const { themeColor, setThemeColor, hasCustomization } = useTheme();
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"background" | "theme">(
+    "background"
+  );
   const canUploadVideos = hasFeature("VIDEO_BACKGROUND");
+
+  const THEME_PRESETS = [
+    { name: "Azul", value: "#3B82F6", label: "Padrão" },
+    { name: "Vermelho", value: "#EF4444", label: "Energia" },
+    { name: "Verde", value: "#10B981", label: "Natureza" },
+    { name: "Roxo", value: "#8B5CF6", label: "Criatividade" },
+  ];
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -125,109 +139,224 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
       widgetId={widgetId}
     >
       <div className="p-6 space-y-6">
-        {/* Upload Section */}
-        <div className="space-y-3">
-          <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
-            Upload Personalizado
-          </h3>
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="relative border-2 border-dashed border-white/20 rounded-xl p-8 text-center cursor-pointer hover:border-white/30 transition-colors group"
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <Upload
-              className="h-8 w-8 mx-auto mb-3 text-white/50 group-hover:text-white/70 transition-colors"
-              strokeWidth={1.5}
-            />
-            <p className="text-sm text-white/90 font-light mb-1">
-              {isUploading ? "Enviando..." : "Arraste ou clique"}
-            </p>
-            <p className="text-xs text-white/50 font-light">
-              {canUploadVideos
-                ? "JPG, PNG, MP4, WebM habilitados"
-                : "Plano Free: apenas JPG/PNG"}
-            </p>
-          </div>
-        </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as "background" | "theme")}
+          className="w-full"
+        >
+          <TabsList className="grid w-full grid-cols-2 bg-white/5 border border-white/10">
+            <TabsTrigger
+              value="background"
+              className="data-[state=active]:bg-white/10 data-[state=active]:text-white/90 text-white/60"
+            >
+              Fundo
+            </TabsTrigger>
+            {hasCustomization && (
+              <TabsTrigger
+                value="theme"
+                className="data-[state=active]:bg-white/10 data-[state=active]:text-white/90 text-white/60"
+              >
+                Tema
+              </TabsTrigger>
+            )}
+          </TabsList>
 
-        <AuthWall
-          open={showAuthWall}
-          onOpenChange={setShowAuthWall}
-          message="Faça login ou crie uma conta para usar fundos personalizados."
-        />
+          <TabsContent value="background" className="space-y-6 mt-6">
+            {/* Upload Section */}
+            <div className="space-y-3">
+              <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
+                Upload Personalizado
+              </h3>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="relative border-2 border-dashed border-white/20 rounded-xl p-8 text-center cursor-pointer hover:border-white/30 transition-colors group"
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Upload
+                  className="h-8 w-8 mx-auto mb-3 text-white/50 group-hover:text-white/70 transition-colors"
+                  strokeWidth={1.5}
+                />
+                <p className="text-sm text-white/90 font-light mb-1">
+                  {isUploading ? "Enviando..." : "Arraste ou clique"}
+                </p>
+                <p className="text-xs text-white/50 font-light">
+                  {canUploadVideos
+                    ? "JPG, PNG, MP4, WebM habilitados"
+                    : "Plano Free: apenas JPG/PNG"}
+                </p>
+              </div>
+            </div>
 
-        {/* Preset Backgrounds */}
-        <div className="space-y-3">
-          <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
-            Fundos Pré-definidos
-          </h3>
-          <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
-            {PRESET_BACKGROUNDS.map((bg) => {
-              const isSelected = currentBackground === bg.url;
-              return (
-                <motion.button
-                  key={bg.id}
-                  onClick={() => handlePresetSelect(bg.url)}
-                  className={`relative rounded-lg overflow-hidden border-2 transition-all ${
-                    isSelected
-                      ? "border-blue-500 ring-2 ring-blue-500/50"
-                      : "border-white/10 hover:border-white/20"
-                  }`}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {bg.url ? (
-                    <div
-                      className="w-full h-24 bg-cover bg-center relative"
-                      style={{ backgroundImage: `url(${bg.url})` }}
+            <AuthWall
+              open={showAuthWall}
+              onOpenChange={setShowAuthWall}
+              message="Faça login ou crie uma conta para usar fundos personalizados."
+            />
+
+            {/* Preset Backgrounds */}
+            <div className="space-y-3">
+              <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
+                Fundos Pré-definidos
+              </h3>
+              <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
+                {PRESET_BACKGROUNDS.map((bg) => {
+                  const isSelected = currentBackground === bg.url;
+                  return (
+                    <motion.button
+                      key={bg.id}
+                      onClick={() => handlePresetSelect(bg.url)}
+                      className={cn(
+                        "relative rounded-lg overflow-hidden border-2 transition-all",
+                        isSelected
+                          ? "ring-2"
+                          : "border-white/10 hover:border-white/20"
+                      )}
+                      style={
+                        isSelected
+                          ? {
+                              borderColor: themeColor,
+                              ringColor: `${themeColor}50`,
+                            }
+                          : {}
+                      }
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
-                      {isSelected && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center"
+                      {bg.url ? (
+                        <div
+                          className="w-full h-24 bg-cover bg-center relative"
+                          style={{ backgroundImage: `url(${bg.url})` }}
                         >
-                          <Check
-                            className="h-3 w-3 text-white"
-                            strokeWidth={2}
-                          />
-                        </motion.div>
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                          {isSelected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: themeColor }}
+                            >
+                              <Check
+                                className="h-3 w-3 text-white"
+                                strokeWidth={2}
+                              />
+                            </motion.div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="w-full h-24 bg-black/40 border border-white/10 relative flex items-center justify-center">
+                          <div className="text-2xl text-white/30">○</div>
+                          {isSelected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: themeColor }}
+                            >
+                              <Check
+                                className="h-3 w-3 text-white"
+                                strokeWidth={2}
+                              />
+                            </motion.div>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-24 bg-black/40 border border-white/10 relative flex items-center justify-center">
-                      <div className="text-2xl text-white/30">○</div>
-                      {isSelected && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center"
-                        >
-                          <Check
-                            className="h-3 w-3 text-white"
-                            strokeWidth={2}
+                      <div className="p-2">
+                        <h4 className="text-xs font-medium text-white/90 text-left">
+                          {bg.name}
+                        </h4>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          </TabsContent>
+
+          {hasCustomization && (
+            <TabsContent value="theme" className="space-y-6 mt-6">
+              <div className="space-y-4">
+                <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
+                  Cor de Destaque
+                </h3>
+                <p className="text-sm text-white/70 font-light">
+                  Personalize a cor principal da interface. Esta cor será
+                  aplicada aos botões, ícones ativos e ao modo de foco do timer.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {THEME_PRESETS.map((preset) => {
+                    const isSelected = themeColor === preset.value;
+                    return (
+                      <motion.button
+                        key={preset.value}
+                        onClick={() => {
+                          if (!hasCustomization) {
+                            requireFeature(
+                              "FULL_CUSTOMIZATION",
+                              "Customização Total",
+                              "Epic"
+                            );
+                            return;
+                          }
+                          setThemeColor(preset.value);
+                          toast({
+                            title: "Tema atualizado",
+                            description: `Cor ${preset.name.toLowerCase()} aplicada com sucesso.`,
+                          });
+                        }}
+                        className={cn(
+                          "relative rounded-xl p-4 border-2 transition-all",
+                          isSelected
+                            ? "border-white/60 ring-2 ring-white/30"
+                            : "border-white/10 hover:border-white/20"
+                        )}
+                        style={{
+                          backgroundColor: `${preset.value}20`,
+                          borderColor: isSelected ? preset.value : undefined,
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-full border-2 border-white/20"
+                            style={{ backgroundColor: preset.value }}
                           />
-                        </motion.div>
-                      )}
-                    </div>
-                  )}
-                  <div className="p-2">
-                    <h4 className="text-xs font-medium text-white/90 text-left">
-                      {bg.name}
-                    </h4>
-                  </div>
-                </motion.button>
-              );
-            })}
-          </div>
-        </div>
+                          <div className="flex-1 text-left">
+                            <p className="text-sm font-medium text-white/90">
+                              {preset.name}
+                            </p>
+                            <p className="text-xs text-white/50 font-light">
+                              {preset.label}
+                            </p>
+                          </div>
+                          {isSelected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="w-5 h-5 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: preset.value }}
+                            >
+                              <Check
+                                className="h-3 w-3 text-white"
+                                strokeWidth={2}
+                              />
+                            </motion.div>
+                          )}
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+            </TabsContent>
+          )}
+        </Tabs>
       </div>
     </WidgetContainer>
   );
