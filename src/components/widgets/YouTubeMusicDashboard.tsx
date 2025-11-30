@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   List,
   LogOut,
+  EyeOff,
 } from "lucide-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -86,6 +87,8 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
 
   // Sincronização: Se já está tocando música ao abrir o widget, mostra o player
   const hasSyncedRef = useRef(false);
@@ -153,6 +156,58 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Mutation para importar playlist
+  const importPlaylistMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const { data } = await api.post("/media/youtube/playlist/import", {
+        url,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Playlist importada",
+        description: "A playlist foi adicionada à sua biblioteca.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["youtubePlaylists"] });
+      setShowImportModal(false);
+      setImportUrl("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao importar",
+        description:
+          error.response?.data?.message || "Erro ao importar playlist.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation para esconder playlist
+  const hidePlaylistMutation = useMutation({
+    mutationFn: async (playlistId: string) => {
+      const { data } = await api.post(
+        `/media/youtube/playlist/${playlistId}/hide`
+      );
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Playlist ocultada",
+        description: "A playlist foi ocultada da sua biblioteca.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["youtubePlaylists"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description:
+          error.response?.data?.message || "Erro ao ocultar playlist.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Buscar userProfile para verificar isGoogleConnected
   const { data: userProfile } = useQuery<any>({
@@ -372,10 +427,25 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
   useEffect(() => {
     // Evita múltiplas execuções para a mesma playlist
     const playlistId = selectedPlaylist?.id || "none";
+
+    // Guard clause: verifica se há playlist selecionada e dados válidos
+    if (
+      !selectedPlaylist?.id ||
+      !playlistId ||
+      playlistId === "[]" ||
+      playlistId === "" ||
+      playlistId === "none" ||
+      typeof playlistId !== "string" ||
+      playlistId.trim() === ""
+    ) {
+      return;
+    }
+
     if (
       view === "PLAYER" &&
       playlistTracks &&
       playlistTracks.items &&
+      Array.isArray(playlistTracks.items) &&
       playlistTracks.items.length > 0 &&
       playlistLoadedRef.current !== playlistId
     ) {
@@ -384,7 +454,7 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
         : playlistTracks.items;
 
       // Prevenção de crash: verifica se há tracks antes de inicializar
-      if (tracks.length === 0) {
+      if (!tracks || tracks.length === 0) {
         toast({
           title: "Playlist vazia",
           description: "Esta playlist não contém músicas.",
@@ -763,6 +833,26 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
                 Sua Biblioteca
               </h2>
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                  title="Importar playlist por link"
+                >
+                  <LinkIcon className="h-4 w-4 text-white/70" />
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSearch(!showSearch);
+                    if (!showSearch) {
+                      setShowSearchResults(false);
+                      setSearchQuery("");
+                    }
+                  }}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                  title="Buscar"
+                >
+                  <Search className="h-4 w-4 text-white/70" />
+                </button>
                 {onDisconnect && (
                   <button
                     onClick={onDisconnect}
@@ -773,18 +863,6 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
                     <LogOut className="h-4 w-4" />
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    setShowSearch(!showSearch);
-                    if (!showSearch) {
-                      setShowSearchResults(false);
-                      setSearchQuery("");
-                    }
-                  }}
-                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <Search className="h-4 w-4 text-white/70" />
-                </button>
               </div>
             </div>
 
@@ -945,33 +1023,47 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
                       : true
                   )
                   .map((playlist) => (
-                    <button
+                    <div
                       key={playlist.id}
-                      onClick={() => handlePlaylistClick(playlist)}
-                      className="group bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-colors text-left"
+                      className="group relative bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-colors"
                     >
-                      {playlist.thumbnail ? (
-                        <img
-                          src={playlist.thumbnail}
-                          alt={playlist.title}
-                          className="w-full aspect-square rounded-lg object-cover mb-1.5"
-                        />
-                      ) : (
-                        <div className="w-full aspect-square rounded-lg bg-[#FF0000]/20 flex items-center justify-center mb-1.5">
+                      <button
+                        onClick={() => handlePlaylistClick(playlist)}
+                        className="w-full text-left"
+                      >
+                        {playlist.thumbnail ? (
                           <img
-                            src={musicIcon}
-                            alt="YouTube Music"
-                            className="w-8 h-8 opacity-60"
+                            src={playlist.thumbnail}
+                            alt={playlist.title}
+                            className="w-full aspect-square rounded-lg object-cover mb-1.5"
                           />
-                        </div>
-                      )}
-                      <p className="text-xs font-medium text-white truncate mb-0.5">
-                        {playlist.title}
-                      </p>
-                      <p className="text-[10px] text-white/60 truncate">
-                        {playlist.itemCount} músicas
-                      </p>
-                    </button>
+                        ) : (
+                          <div className="w-full aspect-square rounded-lg bg-[#FF0000]/20 flex items-center justify-center mb-1.5">
+                            <img
+                              src={musicIcon}
+                              alt="YouTube Music"
+                              className="w-8 h-8 opacity-60"
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs font-medium text-white truncate mb-0.5">
+                          {playlist.title}
+                        </p>
+                        <p className="text-[10px] text-white/60 truncate">
+                          {playlist.itemCount} músicas
+                        </p>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          hidePlaylistMutation.mutate(playlist.id);
+                        }}
+                        className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Ocultar playlist"
+                      >
+                        <EyeOff className="h-3 w-3 text-white/70" />
+                      </button>
+                    </div>
                   ))}
               </div>
             ) : (
@@ -1258,6 +1350,59 @@ export const YouTubeMusicDashboard: React.FC<YouTubeMusicDashboardProps> = ({
             </div>
           </div>
         </>
+      )}
+
+      {/* Modal de Importar Playlist */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#030303] rounded-lg p-4 w-full max-w-sm mx-4 border border-white/10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white">
+                Importar Playlist
+              </h3>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportUrl("");
+                }}
+                className="p-1 hover:bg-white/10 rounded-full"
+              >
+                <X className="h-4 w-4 text-white/70" />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              placeholder="Cole o link da playlist do YouTube"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 mb-3"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportUrl("");
+                }}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (importUrl.trim()) {
+                    importPlaylistMutation.mutate(importUrl.trim());
+                  }
+                }}
+                disabled={!importUrl.trim() || importPlaylistMutation.isPending}
+                className="flex-1 px-4 py-2 bg-[#FF0000] hover:bg-[#FF3333] text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {importPlaylistMutation.isPending
+                  ? "Importando..."
+                  : "Importar"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

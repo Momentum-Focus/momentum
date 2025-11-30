@@ -12,8 +12,9 @@ import {
   Plus,
   ExternalLink,
   LogOut,
+  EyeOff,
 } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { SpotifyUrlInput } from "./SpotifyUrlInput";
@@ -238,6 +239,31 @@ export const SpotifyDashboard: React.FC<SpotifyDashboardProps> = ({
       !!spotifyToken &&
       !isTokenError,
     retry: 1,
+  });
+
+  // Mutation para esconder playlist
+  const hidePlaylistMutation = useMutation({
+    mutationFn: async (playlistId: string) => {
+      const { data } = await api.post(
+        `/media/spotify/playlist/${playlistId}/hide`
+      );
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Playlist ocultada",
+        description: "A playlist foi ocultada da sua biblioteca.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["spotifyPlaylists"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description:
+          error.response?.data?.message || "Erro ao ocultar playlist.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Handlers usando o contexto global
@@ -506,16 +532,6 @@ export const SpotifyDashboard: React.FC<SpotifyDashboardProps> = ({
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-white">Biblioteca</h2>
             <div className="flex items-center gap-1">
-              {onDisconnect && (
-                <button
-                  onClick={onDisconnect}
-                  disabled={isDisconnecting}
-                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-red-400"
-                  title="Desconectar Spotify"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              )}
               <button
                 onClick={() => setShowUrlInput(true)}
                 className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
@@ -532,9 +548,20 @@ export const SpotifyDashboard: React.FC<SpotifyDashboardProps> = ({
                   }
                 }}
                 className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                title="Buscar"
               >
                 <Search className="h-4 w-4 text-white/70" />
               </button>
+              {onDisconnect && (
+                <button
+                  onClick={onDisconnect}
+                  disabled={isDisconnecting}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-red-400"
+                  title="Desconectar Spotify"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
           {showSearch && (
@@ -576,33 +603,47 @@ export const SpotifyDashboard: React.FC<SpotifyDashboardProps> = ({
                     : true
                 )
                 .map((playlist) => (
-                  <button
+                  <div
                     key={playlist.id}
-                    onClick={() => handlePlaylistClick(playlist)}
-                    className="group bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-colors text-left"
+                    className="group relative bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-colors"
                   >
-                    {playlist.image ? (
-                      <img
-                        src={playlist.image}
-                        alt={playlist.name}
-                        className="w-full aspect-square rounded-md object-cover mb-1.5"
-                      />
-                    ) : (
-                      <div className="w-full aspect-square rounded-md bg-[#1DB954]/20 flex items-center justify-center mb-1.5">
+                    <button
+                      onClick={() => handlePlaylistClick(playlist)}
+                      className="w-full text-left"
+                    >
+                      {playlist.image ? (
                         <img
-                          src={spotifyIcon}
-                          alt="Spotify"
-                          className="w-8 h-8 opacity-60"
+                          src={playlist.image}
+                          alt={playlist.name}
+                          className="w-full aspect-square rounded-md object-cover mb-1.5"
                         />
-                      </div>
-                    )}
-                    <p className="text-xs font-medium text-white truncate mb-0.5">
-                      {playlist.name}
-                    </p>
-                    <p className="text-[10px] text-white/60 truncate">
-                      {playlist.tracksCount} músicas
-                    </p>
-                  </button>
+                      ) : (
+                        <div className="w-full aspect-square rounded-md bg-[#1DB954]/20 flex items-center justify-center mb-1.5">
+                          <img
+                            src={spotifyIcon}
+                            alt="Spotify"
+                            className="w-8 h-8 opacity-60"
+                          />
+                        </div>
+                      )}
+                      <p className="text-xs font-medium text-white truncate mb-0.5">
+                        {playlist.name}
+                      </p>
+                      <p className="text-[10px] text-white/60 truncate">
+                        {playlist.tracksCount} músicas
+                      </p>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        hidePlaylistMutation.mutate(playlist.id);
+                      }}
+                      className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Ocultar playlist"
+                    >
+                      <EyeOff className="h-3 w-3 text-white/70" />
+                    </button>
+                  </div>
                 ))}
             </div>
           ) : (
@@ -647,16 +688,6 @@ export const SpotifyDashboard: React.FC<SpotifyDashboardProps> = ({
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-white">Biblioteca</h2>
             <div className="flex items-center gap-1">
-              {onDisconnect && (
-                <button
-                  onClick={onDisconnect}
-                  disabled={isDisconnecting}
-                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-red-400"
-                  title="Desconectar Spotify"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              )}
               <button
                 onClick={() => setShowUrlInput(true)}
                 className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
@@ -673,9 +704,20 @@ export const SpotifyDashboard: React.FC<SpotifyDashboardProps> = ({
                   }
                 }}
                 className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                title="Buscar"
               >
                 <Search className="h-4 w-4 text-white/70" />
               </button>
+              {onDisconnect && (
+                <button
+                  onClick={onDisconnect}
+                  disabled={isDisconnecting}
+                  className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-red-400"
+                  title="Desconectar Spotify"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
           {showSearch && (
@@ -823,33 +865,47 @@ export const SpotifyDashboard: React.FC<SpotifyDashboardProps> = ({
                     : true
                 )
                 .map((playlist) => (
-                  <button
+                  <div
                     key={playlist.id}
-                    onClick={() => handlePlaylistClick(playlist)}
-                    className="group bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-colors text-left"
+                    className="group relative bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-colors"
                   >
-                    {playlist.image ? (
-                      <img
-                        src={playlist.image}
-                        alt={playlist.name}
-                        className="w-full aspect-square rounded-md object-cover mb-1.5"
-                      />
-                    ) : (
-                      <div className="w-full aspect-square rounded-md bg-[#1DB954]/20 flex items-center justify-center mb-1.5">
+                    <button
+                      onClick={() => handlePlaylistClick(playlist)}
+                      className="w-full text-left"
+                    >
+                      {playlist.image ? (
                         <img
-                          src={spotifyIcon}
-                          alt="Spotify"
-                          className="w-8 h-8 opacity-60"
+                          src={playlist.image}
+                          alt={playlist.name}
+                          className="w-full aspect-square rounded-md object-cover mb-1.5"
                         />
-                      </div>
-                    )}
-                    <p className="text-xs font-medium text-white truncate mb-0.5">
-                      {playlist.name}
-                    </p>
-                    <p className="text-[10px] text-white/60 truncate">
-                      {playlist.tracksCount} músicas
-                    </p>
-                  </button>
+                      ) : (
+                        <div className="w-full aspect-square rounded-md bg-[#1DB954]/20 flex items-center justify-center mb-1.5">
+                          <img
+                            src={spotifyIcon}
+                            alt="Spotify"
+                            className="w-8 h-8 opacity-60"
+                          />
+                        </div>
+                      )}
+                      <p className="text-xs font-medium text-white truncate mb-0.5">
+                        {playlist.name}
+                      </p>
+                      <p className="text-[10px] text-white/60 truncate">
+                        {playlist.tracksCount} músicas
+                      </p>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        hidePlaylistMutation.mutate(playlist.id);
+                      }}
+                      className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Ocultar playlist"
+                    >
+                      <EyeOff className="h-3 w-3 text-white/70" />
+                    </button>
+                  </div>
                 ))}
             </div>
           ) : (
