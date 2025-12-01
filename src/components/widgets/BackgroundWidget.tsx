@@ -119,6 +119,7 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
   });
 
   // Buscar URLs dos backgrounds pré-definidos do Supabase
+  // Se o endpoint não existir (404), usa fallback silenciosamente
   const { data: presetBackgroundUrls } = useQuery<{
     forest: string | null;
     ocean: string | null;
@@ -131,11 +132,18 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
       try {
         const { data } = await api.get("/media/preset-backgrounds/urls");
         return data;
-      } catch (error) {
-        console.error(
-          "Erro ao buscar URLs dos backgrounds pré-definidos:",
-          error
-        );
+      } catch (error: any) {
+        // Se for 404, o endpoint não existe em produção ainda - usa fallback silenciosamente
+        if (error.response?.status === 404) {
+          return {
+            forest: null,
+            ocean: null,
+            mountains: null,
+            library: null,
+            minimal: null,
+          };
+        }
+        // Para outros erros, também retorna null para usar fallback
         return {
           forest: null,
           ocean: null,
@@ -145,7 +153,7 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
         };
       }
     },
-    retry: 1,
+    retry: false, // Não tentar novamente se falhar
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // Cache por 5 minutos
   });
@@ -214,14 +222,32 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
       });
     } catch (error: any) {
       const statusCode = error.response?.status;
-      const message =
-        error.response?.data?.message ||
-        "Não foi possível fazer o upload. Tente novamente.";
+      let message = "Não foi possível fazer o upload. Tente novamente.";
+
+      // Tratar diferentes tipos de erro
+      if (
+        error.code === "ERR_NETWORK" ||
+        error.message?.includes("fetch failed")
+      ) {
+        message = "Erro de conexão. Verifique sua internet e tente novamente.";
+      } else if (error.response?.data?.message) {
+        message = error.response.data.message;
+      } else if (error.message) {
+        message = error.message;
+      }
 
       if (statusCode === 403) {
         toast({
           title: "Upgrade necessário",
           description: "Upgrade to Flow/Epic to upload videos.",
+          variant: "destructive",
+        });
+      } else if (statusCode === 400) {
+        toast({
+          title: "Erro ao fazer upload",
+          description:
+            message ||
+            "Arquivo inválido ou muito grande. Tente com outro arquivo.",
           variant: "destructive",
         });
       } else {
