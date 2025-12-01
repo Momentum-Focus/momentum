@@ -12,6 +12,7 @@ import { useMusicPlayer } from "@/context/music-player-context";
 import spotifyIcon from "@/assets/icon-spotify.png";
 import musicIcon from "@/assets/icon-music.png";
 import { FOCUS_SOUND_URLS } from "@/config/focus-sounds";
+import { focusSoundManager } from "@/lib/focus-sound-manager";
 
 interface MusicWidgetProps {
   onClose: () => void;
@@ -43,8 +44,17 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
   // Contexto global do player
   const { activeService, isPlaying } = useMusicPlayer();
 
-  const [activeFocusSound, setActiveFocusSound] = useState<FocusSound>(null);
-  const focusSoundAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Estado sincronizado com o gerenciador global
+  const [activeFocusSound, setActiveFocusSound] = useState<FocusSound>(() => {
+    // Inicializa verificando o gerenciador global e o localStorage
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(
+        "momentum-active-focus-sound"
+      ) as FocusSound;
+      return saved || focusSoundManager.getCurrentSound();
+    }
+    return null;
+  });
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { themeColor } = useTheme();
@@ -205,47 +215,33 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
   // Monitorar mudanças no estado de reprodução para parar sons de foco
   useEffect(() => {
     if (isPlaying && activeFocusSound) {
+      // Para o som quando música Spotify/YouTube começa a tocar
       stopFocusSound();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying]);
 
   const handleFocusSoundPlay = (sound: FocusSound) => {
-    if (sound === activeFocusSound) {
+    if (sound === activeFocusSound || focusSoundManager.isPlaying(sound)) {
+      // Se já está tocando, desliga
       stopFocusSound();
       return;
     }
 
+    // Para qualquer som anterior
     stopFocusSound();
 
     if (sound && focusSoundUrls[sound]) {
-      setActiveFocusSound(sound);
-
-      if (focusSoundAudioRef.current) {
-        focusSoundAudioRef.current.pause();
-        focusSoundAudioRef.current = null;
-      }
-
-      const audio = new Audio(focusSoundUrls[sound]);
-      audio.loop = true;
-      audio.volume = 0.5;
-
-      audio.addEventListener("play", () => {
+      try {
+        // Usa o gerenciador global para tocar o som
+        focusSoundManager.play(focusSoundUrls[sound], sound);
         setActiveFocusSound(sound);
-      });
 
-      audio.addEventListener("error", (error) => {
-        console.error("Erro ao tocar som de foco:", error);
-        toast({
-          title: "Erro",
-          description:
-            "Não foi possível reproduzir o som de foco. Verifique sua conexão.",
-          variant: "destructive",
-        });
-        setActiveFocusSound(null);
-      });
-
-      audio.play().catch((error) => {
+        // Salva no localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem("momentum-active-focus-sound", sound);
+        }
+      } catch (error) {
         console.error("Erro ao tocar som de foco:", error);
         toast({
           title: "Erro",
@@ -253,28 +249,55 @@ export const MusicWidget: React.FC<MusicWidgetProps> = ({
           variant: "destructive",
         });
         setActiveFocusSound(null);
-      });
-
-      focusSoundAudioRef.current = audio;
+      }
     }
   };
 
   const stopFocusSound = () => {
-    if (focusSoundAudioRef.current) {
-      focusSoundAudioRef.current.pause();
-      focusSoundAudioRef.current = null;
-    }
+    // Usa o gerenciador global para parar
+    focusSoundManager.stop();
     setActiveFocusSound(null);
   };
 
-  // Cleanup ao desmontar
+  // Persistir estado do som ativo no localStorage
   useEffect(() => {
-    return () => {
-      if (focusSoundAudioRef.current) {
-        focusSoundAudioRef.current.pause();
+    if (typeof window !== "undefined") {
+      if (activeFocusSound) {
+        localStorage.setItem("momentum-active-focus-sound", activeFocusSound);
+      } else {
+        localStorage.removeItem("momentum-active-focus-sound");
       }
-    };
-  }, []);
+    }
+  }, [activeFocusSound]);
+
+  // Restaurar som ativo ao montar o componente (se houver um salvo)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedSound = localStorage.getItem(
+        "momentum-active-focus-sound"
+      ) as FocusSound;
+      if (savedSound && focusSoundUrls[savedSound]) {
+        // Restaura usando o gerenciador global (que persiste mesmo quando widget fecha)
+        if (!focusSoundManager.isPlaying(savedSound)) {
+          focusSoundManager.restore(savedSound, focusSoundUrls[savedSound]);
+          setActiveFocusSound(savedSound);
+        } else {
+          // Se já está tocando, apenas sincroniza o estado
+          setActiveFocusSound(savedSound);
+        }
+      }
+
+      // Sincroniza estado com o gerenciador global
+      const currentGlobalSound = focusSoundManager.getCurrentSound();
+      if (currentGlobalSound && currentGlobalSound !== activeFocusSound) {
+        setActiveFocusSound(currentGlobalSound);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Apenas na montagem inicial
+
+  // IMPORTANTE: NÃO há cleanup que pare o áudio quando o widget fecha
+  // O gerenciador global mantém o áudio tocando em loop infinito até o usuário desligar
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
