@@ -81,11 +81,8 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
     formData.append("file", file);
 
     try {
-      const { data } = await api.post("/media/background/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      // Não definir Content-Type manualmente - axios define automaticamente com boundary correto
+      const { data } = await api.post("/media/background/upload", formData);
       onBackgroundSelect(data.url);
       toast({
         title: "Plano de fundo atualizado",
