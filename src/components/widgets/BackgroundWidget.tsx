@@ -32,35 +32,43 @@ interface BackgroundWidgetProps {
   widgetId?: string;
 }
 
-const PRESET_BACKGROUNDS = [
+// URLs de fallback caso as imagens não estejam disponíveis no Supabase
+const FALLBACK_PRESET_URLS = {
+  forest:
+    "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1920&q=80",
+  ocean:
+    "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=1920&q=80",
+  mountains:
+    "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80",
+  library:
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1920&q=80",
+  minimal: "",
+};
+
+const PRESET_BACKGROUNDS_CONFIG = [
   {
     id: "forest",
     name: "Floresta Tranquila",
-    url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1920&q=80",
     description: "Natureza verde e relaxante",
   },
   {
     id: "ocean",
     name: "Oceano Calmo",
-    url: "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=1920&q=80",
     description: "Vista serena do mar",
   },
   {
     id: "mountains",
     name: "Montanhas Nevadas",
-    url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80",
     description: "Paisagem montanhosa inspiradora",
   },
   {
     id: "library",
     name: "Biblioteca Aconchegante",
-    url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1920&q=80",
     description: "Ambiente de estudo clássico",
   },
   {
     id: "minimal",
     name: "Minimalista",
-    url: "",
     description: "Fundo neutro e limpo",
   },
 ];
@@ -110,6 +118,59 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
     refetchOnWindowFocus: false,
   });
 
+  // Buscar URLs dos backgrounds pré-definidos do Supabase
+  const { data: presetBackgroundUrls } = useQuery<{
+    forest: string | null;
+    ocean: string | null;
+    mountains: string | null;
+    library: string | null;
+    minimal: string | null;
+  }>({
+    queryKey: ["presetBackgroundUrls"],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get("/media/preset-backgrounds/urls");
+        return data;
+      } catch (error) {
+        console.error(
+          "Erro ao buscar URLs dos backgrounds pré-definidos:",
+          error
+        );
+        return {
+          forest: null,
+          ocean: null,
+          mountains: null,
+          library: null,
+          minimal: null,
+        };
+      }
+    },
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  });
+
+  // Montar array de backgrounds pré-definidos com URLs do Supabase ou fallback
+  // Sempre usa fallback inicialmente, depois atualiza com URLs do Supabase quando disponíveis
+  const PRESET_BACKGROUNDS = React.useMemo(() => {
+    const backgrounds = PRESET_BACKGROUNDS_CONFIG.map((bg) => {
+      const supabaseUrl =
+        presetBackgroundUrls?.[bg.id as keyof typeof presetBackgroundUrls];
+      const fallbackUrl =
+        FALLBACK_PRESET_URLS[bg.id as keyof typeof FALLBACK_PRESET_URLS];
+      // Usa URL do Supabase se disponível e não for null, senão usa fallback
+      const finalUrl =
+        supabaseUrl && supabaseUrl !== null ? supabaseUrl : fallbackUrl || "";
+
+      return {
+        ...bg,
+        url: finalUrl,
+      };
+    });
+
+    return backgrounds;
+  }, [presetBackgroundUrls]);
+
   const THEME_PRESETS = [
     { name: "Azul", value: "#3B82F6", label: "Padrão" },
     { name: "Vermelho", value: "#EF4444", label: "Energia" },
@@ -135,11 +196,8 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
     setIsUploading(true);
 
     try {
-      const { data } = await api.post("/media/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      // Não definir Content-Type manualmente - axios define automaticamente com boundary correto
+      const { data } = await api.post("/media/upload", formData);
 
       // data contém: { id, url, type }
       onBackgroundSelect(data.url, data.type);
@@ -236,7 +294,7 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
       onDragEnd={onDragEnd}
       widgetId={widgetId}
     >
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(80vh-80px)] pr-2 custom-scrollbar">
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as "background" | "theme")}
@@ -260,7 +318,7 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
           </TabsList>
 
           <TabsContent value="background" className="space-y-6 mt-6">
-            {/* Upload Section */}
+            {/* 1. Upload Section - PRIMEIRO */}
             <div className="space-y-3">
               <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
                 Upload Personalizado
@@ -297,82 +355,149 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
               message="Faça login ou crie uma conta para usar fundos personalizados."
             />
 
-            {/* User Uploaded Media */}
-            {token && (
-              <div className="space-y-3">
-                <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
-                  Meus Uploads
-                </h3>
-                {isLoadingMedia ? (
-                  <div className="text-center py-8 text-white/50 text-sm">
-                    Carregando...
-                  </div>
-                ) : userMedia.length === 0 ? (
-                  <div className="text-center py-8 text-white/50 text-sm">
-                    Nenhum upload ainda
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
-                    {userMedia.map((media) => {
-                      const isSelected = currentBackground === media.url;
-                      const isVideo = media.type === "VIDEO";
+            {/* 2. User Uploaded Media - SEGUNDO */}
+            <div className="space-y-3">
+              <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
+                Meus Uploads
+              </h3>
+              {!token ? (
+                <div className="text-center py-8 text-white/50 text-sm">
+                  Faça login para ver seus uploads
+                </div>
+              ) : isLoadingMedia ? (
+                <div className="text-center py-8 text-white/50 text-sm">
+                  Carregando...
+                </div>
+              ) : userMedia.length === 0 ? (
+                <div className="text-center py-8 text-white/50 text-sm">
+                  Nenhum upload ainda
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {userMedia.map((media) => {
+                    const isSelected = currentBackground === media.url;
+                    const isVideo = media.type === "VIDEO";
 
-                      return (
-                        <motion.div
-                          key={media.id}
-                          className="relative group"
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
+                    return (
+                      <motion.div
+                        key={media.id}
+                        className="relative group"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <button
+                          onClick={() =>
+                            handlePresetSelect(media.url, media.type)
+                          }
+                          className={cn(
+                            "relative w-full rounded-lg overflow-hidden border-2 transition-all",
+                            isSelected
+                              ? "ring-2"
+                              : "border-white/10 hover:border-white/20"
+                          )}
+                          style={
+                            isSelected
+                              ? {
+                                  borderColor: themeColor,
+                                }
+                              : {}
+                          }
                         >
-                          <button
-                            onClick={() =>
-                              handlePresetSelect(media.url, media.type)
-                            }
-                            className={cn(
-                              "relative w-full rounded-lg overflow-hidden border-2 transition-all",
-                              isSelected
-                                ? "ring-2"
-                                : "border-white/10 hover:border-white/20"
-                            )}
-                            style={
-                              isSelected
-                                ? {
-                                    borderColor: themeColor,
-                                    ringColor: `${themeColor}50`,
-                                  }
-                                : {}
-                            }
+                          {isVideo ? (
+                            <div className="w-full h-24 bg-black/60 relative flex items-center justify-center overflow-hidden">
+                              <video
+                                src={media.url}
+                                className="w-full h-full object-cover opacity-50"
+                                muted
+                                playsInline
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <div className="text-2xl text-white/70">▶</div>
+                              </div>
+                              <div className="absolute bottom-1 right-1 text-[8px] text-white/80 bg-black/70 px-1.5 py-0.5 rounded font-medium">
+                                Vídeo
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              className="w-full h-24 bg-cover bg-center relative"
+                              style={{ backgroundImage: `url(${media.url})` }}
+                            >
+                              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                            </div>
+                          )}
+                          {isSelected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center z-10"
+                              style={{ backgroundColor: themeColor }}
+                            >
+                              <Check
+                                className="h-3 w-3 text-white"
+                                strokeWidth={2}
+                              />
+                            </motion.div>
+                          )}
+                        </button>
+                        {/* Botão de exclusão */}
+                        <button
+                          onClick={(e) => handleDeleteClick(media.id, e)}
+                          className={cn(
+                            "absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity z-20",
+                            "bg-red-500/90 hover:bg-red-500 text-white"
+                          )}
+                          title="Excluir imagem/vídeo"
+                        >
+                          <Trash2 className="h-3 w-3" strokeWidth={2} />
+                        </button>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Preset Backgrounds - TERCEIRO */}
+            <div className="space-y-3">
+              <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
+                Fundos Pré-definidos
+              </h3>
+              {PRESET_BACKGROUNDS.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {PRESET_BACKGROUNDS.map((bg) => {
+                    const isSelected = currentBackground === bg.url;
+                    return (
+                      <motion.button
+                        key={bg.id}
+                        onClick={() => handlePresetSelect(bg.url)}
+                        className={cn(
+                          "relative rounded-lg overflow-hidden border-2 transition-all",
+                          isSelected
+                            ? "ring-2"
+                            : "border-white/10 hover:border-white/20"
+                        )}
+                        style={
+                          isSelected
+                            ? {
+                                borderColor: themeColor,
+                              }
+                            : {}
+                        }
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {bg.url ? (
+                          <div
+                            className="w-full h-24 bg-cover bg-center relative"
+                            style={{ backgroundImage: `url(${bg.url})` }}
                           >
-                            {isVideo ? (
-                              <div className="w-full h-24 bg-black/60 relative flex items-center justify-center overflow-hidden">
-                                <video
-                                  src={media.url}
-                                  className="w-full h-full object-cover opacity-50"
-                                  muted
-                                  playsInline
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                  <div className="text-2xl text-white/70">
-                                    ▶
-                                  </div>
-                                </div>
-                                <div className="absolute bottom-1 right-1 text-[8px] text-white/80 bg-black/70 px-1.5 py-0.5 rounded font-medium">
-                                  Vídeo
-                                </div>
-                              </div>
-                            ) : (
-                              <div
-                                className="w-full h-24 bg-cover bg-center relative"
-                                style={{ backgroundImage: `url(${media.url})` }}
-                              >
-                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
-                              </div>
-                            )}
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                             {isSelected && (
                               <motion.div
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
-                                className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center z-10"
+                                className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
                                 style={{ backgroundColor: themeColor }}
                               >
                                 <Check
@@ -381,102 +506,39 @@ export const BackgroundWidget: React.FC<BackgroundWidgetProps> = ({
                                 />
                               </motion.div>
                             )}
-                          </button>
-                          {/* Botão de exclusão */}
-                          <button
-                            onClick={(e) => handleDeleteClick(media.id, e)}
-                            className={cn(
-                              "absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity z-20",
-                              "bg-red-500/90 hover:bg-red-500 text-white"
+                          </div>
+                        ) : (
+                          <div className="w-full h-24 bg-black/40 border border-white/10 relative flex items-center justify-center">
+                            <div className="text-2xl text-white/30">○</div>
+                            {isSelected && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
+                                style={{ backgroundColor: themeColor }}
+                              >
+                                <Check
+                                  className="h-3 w-3 text-white"
+                                  strokeWidth={2}
+                                />
+                              </motion.div>
                             )}
-                            title="Excluir imagem/vídeo"
-                          >
-                            <Trash2 className="h-3 w-3" strokeWidth={2} />
-                          </button>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Preset Backgrounds */}
-            <div className="space-y-3">
-              <h3 className="text-xs text-white/50 uppercase tracking-wider font-light">
-                Fundos Pré-definidos
-              </h3>
-              <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
-                {PRESET_BACKGROUNDS.map((bg) => {
-                  const isSelected = currentBackground === bg.url;
-                  return (
-                    <motion.button
-                      key={bg.id}
-                      onClick={() => handlePresetSelect(bg.url)}
-                      className={cn(
-                        "relative rounded-lg overflow-hidden border-2 transition-all",
-                        isSelected
-                          ? "ring-2"
-                          : "border-white/10 hover:border-white/20"
-                      )}
-                      style={
-                        isSelected
-                          ? {
-                              borderColor: themeColor,
-                              ringColor: `${themeColor}50`,
-                            }
-                          : {}
-                      }
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {bg.url ? (
-                        <div
-                          className="w-full h-24 bg-cover bg-center relative"
-                          style={{ backgroundImage: `url(${bg.url})` }}
-                        >
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
-                          {isSelected && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
-                              style={{ backgroundColor: themeColor }}
-                            >
-                              <Check
-                                className="h-3 w-3 text-white"
-                                strokeWidth={2}
-                              />
-                            </motion.div>
-                          )}
+                          </div>
+                        )}
+                        <div className="p-2">
+                          <h4 className="text-xs font-medium text-white/90 text-left">
+                            {bg.name}
+                          </h4>
                         </div>
-                      ) : (
-                        <div className="w-full h-24 bg-black/40 border border-white/10 relative flex items-center justify-center">
-                          <div className="text-2xl text-white/30">○</div>
-                          {isSelected && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
-                              style={{ backgroundColor: themeColor }}
-                            >
-                              <Check
-                                className="h-3 w-3 text-white"
-                                strokeWidth={2}
-                              />
-                            </motion.div>
-                          )}
-                        </div>
-                      )}
-                      <div className="p-2">
-                        <h4 className="text-xs font-medium text-white/90 text-left">
-                          {bg.name}
-                        </h4>
-                      </div>
-                    </motion.button>
-                  );
-                })}
-              </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-white/50 text-sm">
+                  Carregando backgrounds pré-definidos...
+                </div>
+              )}
             </div>
           </TabsContent>
 
