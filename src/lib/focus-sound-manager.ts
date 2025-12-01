@@ -19,23 +19,92 @@ class FocusSoundManager {
     // Para qualquer som anterior
     this.stop();
 
-    // Cria novo áudio
-    this.audio = new Audio(soundUrl);
-    this.audio.loop = true; // Loop infinito
-    this.audio.volume = this.volume;
-    this.currentSound = soundType;
+    // Valida se a URL é válida
+    if (!soundUrl || soundUrl.trim() === "") {
+      console.error("URL do som de foco inválida ou vazia");
+      return;
+    }
 
-    // Event listeners
-    this.audio.addEventListener("error", () => {
-      console.error("Erro ao tocar som de foco");
-      this.stop();
-    });
+    // Verifica se a URL é acessível antes de criar o elemento de áudio
+    fetch(soundUrl, { method: "HEAD" })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Arquivo não encontrado: ${response.status}`);
+        }
+        // Se a URL é válida, cria e reproduz o áudio
+        this.createAndPlayAudio(soundUrl, soundType);
+      })
+      .catch((error) => {
+        console.error("Erro ao validar URL do som de foco:", error);
+        console.error("URL tentada:", soundUrl);
+        // Tenta mesmo assim, pode ser um problema de CORS no HEAD request
+        this.createAndPlayAudio(soundUrl, soundType);
+      });
+  }
 
-    // Inicia a reprodução
-    this.audio.play().catch((error) => {
-      console.error("Erro ao iniciar som de foco:", error);
+  /**
+   * Cria e reproduz o elemento de áudio
+   */
+  private createAndPlayAudio(soundUrl: string, soundType: FocusSound): void {
+    try {
+      // Cria novo áudio
+      this.audio = new Audio(soundUrl);
+      this.audio.loop = true; // Loop infinito
+      this.audio.volume = this.volume;
+      this.currentSound = soundType;
+
+      // Event listeners para diferentes tipos de erro
+      this.audio.addEventListener("error", (e) => {
+        const error = this.audio?.error;
+        if (error) {
+          let errorMessage = "Erro desconhecido";
+          // Códigos de erro do MediaError (valores numéricos)
+          // MEDIA_ERR_ABORTED = 1
+          // MEDIA_ERR_NETWORK = 2
+          // MEDIA_ERR_DECODE = 3
+          // MEDIA_ERR_SRC_NOT_SUPPORTED = 4
+          switch (error.code) {
+            case 1: // MEDIA_ERR_ABORTED
+              errorMessage = "Reprodução abortada";
+              break;
+            case 2: // MEDIA_ERR_NETWORK
+              errorMessage = "Erro de rede ao carregar o áudio";
+              break;
+            case 3: // MEDIA_ERR_DECODE
+              errorMessage = "Erro ao decodificar o áudio";
+              break;
+            case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+              errorMessage =
+                "Formato de áudio não suportado ou arquivo não encontrado";
+              break;
+          }
+          console.error(
+            `Erro ao tocar som de foco (${soundType}):`,
+            errorMessage
+          );
+          console.error("URL:", soundUrl);
+          console.error("Código de erro:", error.code);
+        } else {
+          console.error("Erro ao tocar som de foco");
+        }
+        this.stop();
+      });
+
+      // Inicia a reprodução
+      this.audio
+        .play()
+        .then(() => {
+          console.log(`Som de foco iniciado: ${soundType}`);
+        })
+        .catch((error) => {
+          console.error("Erro ao iniciar som de foco:", error);
+          console.error("URL:", soundUrl);
+          this.stop();
+        });
+    } catch (error) {
+      console.error("Erro ao criar elemento de áudio:", error);
       this.stop();
-    });
+    }
   }
 
   /**
